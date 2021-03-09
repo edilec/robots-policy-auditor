@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "1",
+  "site": { "origin": "https://example.com" },
+  "robotsTxt": "robots.txt",
+  "checks": "checks.json",
+  "capture": "capture.json"
+}

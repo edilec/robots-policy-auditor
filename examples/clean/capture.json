@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "1",
+  "capturedAt": "2026-09-01 (recorded by the release pipeline, not fetched by this tool)",
+  "responses": [
+    { "url": "https://example.com/", "status": 200, "html": "capture/home.html" },
+    { "url": "https://example.com/internal/notes", "status": 200, "html": "capture/internal-notes.html" },
+    { "url": "https://example.com/search?q=shoes", "status": 200, "headers": {} },
+    { "url": "https://example.com/search/help", "status": 200, "headers": {} },
+    { "url": "https://example.com/drafts/2026-plan", "status": 200, "html": "capture/drafts-2026-plan.html" },
+    { "url": "https://example.com/data/export.json", "status": 200, "headers": {} }
+  ]
+}

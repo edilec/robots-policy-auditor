@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "1",
+  "checks": [
+    {
+      "userAgent": "ExampleBot",
+      "url": "https://example.com/",
+      "expect": { "crawl": "allow", "index": "indexable" },
+      "note": "the site's own agent has its own group"
+    },
+    {
+      "userAgent": "ExampleBot",
+      "url": "https://example.com/internal/notes",
+      "expect": { "crawl": "disallow", "index": "indexable" },
+      "note": "longest match wins over the group's Allow: /"
+    },
+    {
+      "userAgent": "GPTBot",
+      "url": "https://example.com/search?q=shoes",
+      "expect": { "crawl": "disallow", "index": "indexable" },
+      "note": "an agent with no group of its own falls back to *"
+    },
+    {
+      "userAgent": "GPTBot",
+      "url": "https://example.com/search/help",
+      "expect": { "crawl": "allow", "index": "indexable" },
+      "note": "Allow: /search/help is longer than Disallow: /search"
+    },
+    {
+      "userAgent": "ExampleBot",
+      "url": "https://example.com/drafts/2026-plan",
+      "expect": { "crawl": "allow", "index": "blocked" },
+      "note": "the supported way to keep a URL out of an index: crawlable, plus noindex"
+    },
+    {
+      "userAgent": "ExampleBot",
+      "url": "https://example.com/data/export.json",
+      "expect": { "crawl": "allow", "index": "indexable" },
+      "note": "the * group's *.json$ rule does not reach an agent with its own group"
+    },
+    {
+      "userAgent": "OtherBot",
+      "url": "https://example.com/data/export.json",
+      "expect": { "crawl": "disallow", "index": "indexable" },
+      "note": "the same URL, decided by the * group and its end-anchored rule"
+    }
+  ]
+}

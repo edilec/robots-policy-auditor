@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "1",
+  "checks": [
+    {
+      "userAgent": "ExampleBot",
+      "url": "https://example.com/private/report",
+      "expect": { "crawl": "allow" },
+      "note": "the author believed ExampleBot inherits the * group; it does not"
+    },
+    {
+      "userAgent": "GPTBot",
+      "url": "https://example.com/private/report",
+      "note": "a noindex served behind a disallow, which can never be read"
+    },
+    {
+      "userAgent": "GPTBot",
+      "url": "https://example.com/legacy/page",
+      "expect": { "index": "blocked" },
+      "note": "the directive is misspelled, so nothing blocks indexing"
+    },
+    {
+      "userAgent": "GPTBot",
+      "url": "https://example.com/offers",
+      "expect": { "index": "blocked" },
+      "note": "a header and a meta element that disagree"
+    },
+    {
+      "userAgent": "ExampleBot",
+      "url": "https://example.com/notes",
+      "expect": { "crawl": "disallow" },
+      "note": "a noindex placed where no indexer reads it"
+    }
+  ]
+}
