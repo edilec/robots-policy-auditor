@@ -1,0 +1,398 @@
+import assert from 'node:assert/strict'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
+import test from 'node:test'
+import { fileURLToPath } from 'node:url'
+
+import {
+  ConfigError,
+  auditRobotsPolicy,
+  buildReport,
+  comparePointers,
+  exitCodeFor,
+  makeFinding,
+  sortFindings,
+} from '../src/index.mjs'
+
+const projectDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const CLEAN = join(projectDirectory, 'examples/clean/robots-audit.config.json')
+const BROKEN = join(projectDirectory, 'examples/broken/robots-audit.config.json')
+
+/** Write a throwaway input tree. Returns its root and a disposer. */
+async function makeTree(files) {
+  const root = await mkdtemp(join(tmpdir(), 'robots-policy-auditor-'))
+  for (const [name, content] of Object.entries(files)) {
+    const target = join(root, name)
+    await mkdir(dirname(target), { recursive: true })
+    await writeFile(target, content)
+  }
+  return { root, dispose: () => rm(root, { recursive: true, force: true }) }
+}
+
+function config(extra = {}) {
+  return JSON.stringify({
+    schemaVersion: '1',
+    site: { origin: 'https://example.com' },
+    robotsTxt: 'robots.txt',
+    checks: 'checks.json',
+    ...extra,
+  })
+}
+
+function checks(entries) {
+  return JSON.stringify({ schemaVersion: '1', checks: entries })
+}
+
+function findingsOf(report, ruleId) {
+  return report.findings.filter((finding) => finding.ruleId === ruleId)
+}
+
+test('the clean example passes and exits 0', async () => {
+  const report = await auditRobotsPolicy({ configFile: CLEAN })
+  assert.equal(report.status, 'pass')
+  assert.equal(exitCodeFor(report), 0)
+  assert.deepEqual(report.summary, {
+    checked: 7,
+    errors: 0,
+    warnings: 0,
+    allowed: 4,
+    disallowed: 3,
+    indexBlocked: 1,
+    indexUnverified: 0,
+  })
+})
+
+test('every expectation in the clean example is met by the decision it names', async () => {
+  const report = await auditRobotsPolicy({ configFile: CLEAN })
+  assert.deepEqual(
+    findingsOf(report, 'crawl-decision').map((finding) => finding.message),
+    [
+      'crawl=allow index=indexable for "ExampleBot" at /.',
+      'crawl=disallow index=indexable for "ExampleBot" at /internal/notes.',
+      'crawl=disallow index=indexable for "GPTBot" at /search?q=shoes.',
+      'crawl=allow index=indexable for "GPTBot" at /search/help.',
+      'crawl=allow index=blocked for "ExampleBot" at /drafts/2026-plan.',
+      'crawl=allow index=indexable for "ExampleBot" at /data/export.json.',
+      'crawl=disallow index=indexable for "OtherBot" at /data/export.json.',
+    ],
+  )
+  assert.equal(findingsOf(report, 'crawl-expectation-mismatch').length, 0)
+  assert.equal(findingsOf(report, 'index-expectation-mismatch').length, 0)
+})
+
+test('each decision names the rule that won and the line it came from', async () => {
+  const report = await auditRobotsPolicy({ configFile: CLEAN })
+  assert.deepEqual(
+    findingsOf(report, 'crawl-decision').map((finding) => finding.evidence),
+    [
+      'crawl: Allow: / (line 10, 1 octet) in the agent group [ExampleBot]; index: none',
+      'crawl: Disallow: /internal/ (line 11, 10 octets) in the agent group [ExampleBot]; index: none',
+      'crawl: Disallow: /search (line 5, 7 octets) in the global "*" group [*]; index: none',
+      'crawl: Allow: /search/help (line 6, 12 octets) in the global "*" group [*]; index: none',
+      'crawl: Allow: / (line 10, 1 octet) in the agent group [ExampleBot]; index: meta robots "noindex, nofollow" (capture/drafts-2026-plan.html line 5)',
+      'crawl: Allow: / (line 10, 1 octet) in the agent group [ExampleBot]; index: none',
+      'crawl: Disallow: /*.json$ (line 7, 8 octets) in the global "*" group [*]; index: none',
+    ],
+  )
+})
+
+test('the broken example fails and exits 1', async () => {
+  const report = await auditRobotsPolicy({ configFile: BROKEN })
+  assert.equal(report.status, 'fail')
+  assert.equal(exitCodeFor(report), 1)
+  assert.deepEqual(report.summary, {
+    checked: 5,
+    errors: 4,
+    warnings: 8,
+    allowed: 2,
+    disallowed: 3,
+    indexBlocked: 3,
+    indexUnverified: 0,
+  })
+})
+
+/**
+ * The documented order, asserted as an exact structure over three files, seven
+ * pointers and several rules sharing a pointer. Reversing any one of the sort
+ * keys — file, pointer, ruleId — changes this list, which a pairwise
+ * "is sorted" check over findings from a single file could never detect.
+ */
+test('findings are ordered by file, then pointer, then rule id', async () => {
+  const report = await auditRobotsPolicy({ configFile: BROKEN })
+  assert.deepEqual(
+    report.findings.map((finding) => [finding.location.file, finding.location.pointer, finding.ruleId]),
+    [
+      ['capture/legacy-page.html', '/line/0005', 'unknown-index-directive'],
+      ['capture/notes.html', '/line/0008', 'meta-outside-head'],
+      ['checks.json', '/checks/0', 'crawl-decision'],
+      ['checks.json', '/checks/0', 'crawl-expectation-mismatch'],
+      ['checks.json', '/checks/0', 'noindex-behind-disallow'],
+      ['checks.json', '/checks/1', 'crawl-decision'],
+      ['checks.json', '/checks/1', 'noindex-behind-disallow'],
+      ['checks.json', '/checks/2', 'crawl-decision'],
+      ['checks.json', '/checks/2', 'index-expectation-mismatch'],
+      ['checks.json', '/checks/3', 'crawl-decision'],
+      ['checks.json', '/checks/3', 'directive-conflict'],
+      ['checks.json', '/checks/4', 'crawl-decision'],
+      ['checks.json', '/checks/4', 'disallow-is-not-deindex'],
+      ['robots.txt', '/line/0002', 'rule-outside-group'],
+      ['robots.txt', '/line/0006', 'nonstandard-directive'],
+      ['robots.txt', '/line/0007', 'robots-txt-noindex'],
+      ['robots.txt', '/line/0008', 'invalid-rule-path'],
+      ['robots.txt', '/line/0009', 'duplicate-group'],
+      ['robots.txt', '/line/0011', 'malformed-line'],
+      ['robots.txt', '/line/0012', 'unknown-directive'],
+    ],
+  )
+})
+
+test('an array pointer is ordered by its index, not by its spelling', () => {
+  const pointers = ['/checks/10', '/checks/2', '/checks/1', '/checks/20', '/checks/3']
+  const sorted = sortFindings(
+    pointers.map((pointer) => makeFinding('crawl-decision', 'x', { file: 'checks.json', pointer })),
+  )
+  assert.deepEqual(
+    sorted.map((finding) => finding.location.pointer),
+    ['/checks/1', '/checks/2', '/checks/3', '/checks/10', '/checks/20'],
+  )
+  assert.equal(comparePointers('/checks/2', '/checks/10'), -1)
+  assert.equal(comparePointers('/line/0002', '/line/0010'), -1)
+})
+
+test('running twice over identical inputs produces byte-identical output', async () => {
+  const first = await auditRobotsPolicy({ configFile: BROKEN })
+  const second = await auditRobotsPolicy({ configFile: BROKEN })
+  assert.equal(JSON.stringify(first), JSON.stringify(second))
+})
+
+/**
+ * The acceptance requirement this tool exists for: a disallow is never reported
+ * as removal from an index.
+ */
+test('a disallowed URL with no directive is reported as still indexable, not as deindexed', async () => {
+  const tree = await makeTree({
+    'robots.txt': 'User-agent: *\nDisallow: /private\n',
+    'checks.json': checks([{ userAgent: 'GPTBot', url: 'https://example.com/private/report' }]),
+    'capture.json': JSON.stringify({
+      schemaVersion: '1',
+      responses: [{ url: 'https://example.com/private/report', headers: {} }],
+    }),
+    'audit.config.json': config({ capture: 'capture.json' }),
+  })
+  try {
+    const report = await auditRobotsPolicy({ configFile: join(tree.root, 'audit.config.json') })
+    const decision = findingsOf(report, 'crawl-decision')[0]
+    assert.equal(decision.message, 'crawl=disallow index=indexable for "GPTBot" at /private/report.')
+
+    const honest = findingsOf(report, 'disallow-is-not-deindex')
+    assert.equal(honest.length, 1)
+    assert.match(honest[0].message, /can still be indexed from external links/)
+    assert.equal(report.summary.indexBlocked, 0)
+
+    const serialized = JSON.stringify(report)
+    assert.ok(!/deindex(ed|es)\b/i.test(serialized), 'no finding may claim the URL was deindexed')
+  } finally {
+    await tree.dispose()
+  }
+})
+
+test('a noindex served behind a disallow is reported as unreachable', async () => {
+  const tree = await makeTree({
+    'robots.txt': 'User-agent: *\nDisallow: /private\n',
+    'checks.json': checks([{ userAgent: 'GPTBot', url: 'https://example.com/private/report' }]),
+    'capture.json': JSON.stringify({
+      schemaVersion: '1',
+      responses: [{ url: 'https://example.com/private/report', headers: { 'X-Robots-Tag': 'noindex' } }],
+    }),
+    'audit.config.json': config({ capture: 'capture.json' }),
+  })
+  try {
+    const report = await auditRobotsPolicy({ configFile: join(tree.root, 'audit.config.json') })
+    const blocked = findingsOf(report, 'noindex-behind-disallow')
+    assert.equal(blocked.length, 1)
+    assert.equal(blocked[0].severity, 'error')
+    assert.match(blocked[0].message, /never fetches the response, so it never sees the directive/)
+    assert.equal(report.status, 'fail')
+  } finally {
+    await tree.dispose()
+  }
+})
+
+test('an indexing directive scoped to another agent does not decide this agent', async () => {
+  const tree = await makeTree({
+    'robots.txt': 'User-agent: *\nAllow: /\n',
+    'checks.json': checks([
+      { userAgent: 'GoogleBot', url: 'https://example.com/page' },
+      { userAgent: 'GPTBot', url: 'https://example.com/page' },
+    ]),
+    'capture.json': JSON.stringify({
+      schemaVersion: '1',
+      responses: [{ url: 'https://example.com/page', headers: { 'x-robots-tag': 'googlebot: noindex' } }],
+    }),
+    'audit.config.json': config({ capture: 'capture.json' }),
+  })
+  try {
+    const report = await auditRobotsPolicy({ configFile: join(tree.root, 'audit.config.json') })
+    assert.deepEqual(
+      findingsOf(report, 'crawl-decision').map((finding) => finding.message),
+      [
+        'crawl=allow index=blocked for "GoogleBot" at /page.',
+        'crawl=allow index=indexable for "GPTBot" at /page.',
+      ],
+    )
+  } finally {
+    await tree.dispose()
+  }
+})
+
+test('a header carrying anything but X-Robots-Tag never reaches the report', async () => {
+  const secret = 'Bearer wholly-invented-token-value'
+  const tree = await makeTree({
+    'robots.txt': 'User-agent: *\nAllow: /\n',
+    'checks.json': checks([{ userAgent: 'GPTBot', url: 'https://example.com/page' }]),
+    'capture.json': JSON.stringify({
+      schemaVersion: '1',
+      responses: [
+        {
+          url: 'https://example.com/page',
+          headers: { authorization: secret, 'set-cookie': 'session=abc123', 'x-robots-tag': 'noindex' },
+        },
+      ],
+    }),
+    'audit.config.json': config({ capture: 'capture.json' }),
+  })
+  try {
+    const report = await auditRobotsPolicy({ configFile: join(tree.root, 'audit.config.json') })
+    const serialized = JSON.stringify(report)
+    assert.ok(!serialized.includes(secret), 'an authorization value must never be echoed')
+    assert.ok(!serialized.includes('session=abc123'), 'a cookie must never be echoed')
+    assert.ok(!serialized.toLowerCase().includes('authorization'), 'an unread header name must not be echoed')
+    assert.equal(report.summary.indexBlocked, 1)
+  } finally {
+    await tree.dispose()
+  }
+})
+
+test('evidence from an input is bounded and stripped of control characters', async () => {
+  const tree = await makeTree({
+    'robots.txt': `User-agent: *\nDisallow: /${'a'.repeat(400)}\n`,
+    'checks.json': checks([{ userAgent: 'GPTBot', url: `https://example.com/${'a'.repeat(400)}` }]),
+    'audit.config.json': config(),
+  })
+  try {
+    const report = await auditRobotsPolicy({ configFile: join(tree.root, 'audit.config.json') })
+    for (const finding of report.findings) {
+      if (finding.evidence === undefined) continue
+      assert.ok(finding.evidence.length <= 203, `evidence was ${finding.evidence.length} characters`)
+    }
+  } finally {
+    await tree.dispose()
+  }
+})
+
+test('an unknown configuration key is refused rather than ignored', async () => {
+  const tree = await makeTree({
+    'robots.txt': 'User-agent: *\nAllow: /\n',
+    'checks.json': checks([{ userAgent: 'GPTBot', url: 'https://example.com/page' }]),
+    'audit.config.json': JSON.stringify({
+      schemaVersion: '1',
+      site: { origin: 'https://example.com' },
+      robotsTxt: 'robots.txt',
+      checks: 'checks.json',
+      captures: 'capture.json',
+    }),
+  })
+  try {
+    await assert.rejects(
+      auditRobotsPolicy({ configFile: join(tree.root, 'audit.config.json') }),
+      (error) => error instanceof ConfigError && error.rule === 'unknown-key' && /captures/.test(error.message),
+    )
+  } finally {
+    await tree.dispose()
+  }
+})
+
+test('an unknown expectation value is refused rather than silently skipped', async () => {
+  const tree = await makeTree({
+    'robots.txt': 'User-agent: *\nAllow: /\n',
+    'checks.json': checks([{ userAgent: 'GPTBot', url: 'https://example.com/page', expect: { crawl: 'blocked' } }]),
+    'audit.config.json': config(),
+  })
+  try {
+    await assert.rejects(
+      auditRobotsPolicy({ configFile: join(tree.root, 'audit.config.json') }),
+      (error) => error instanceof ConfigError && /expect.crawl must be one of allow, disallow/.test(error.message),
+    )
+  } finally {
+    await tree.dispose()
+  }
+})
+
+test('an unknown limit name is refused rather than ignored', async () => {
+  const tree = await makeTree({
+    'robots.txt': 'User-agent: *\nAllow: /\n',
+    'checks.json': checks([{ userAgent: 'GPTBot', url: 'https://example.com/page' }]),
+    'audit.config.json': config({ limits: { maxRobotsByte: 10 } }),
+  })
+  try {
+    await assert.rejects(
+      auditRobotsPolicy({ configFile: join(tree.root, 'audit.config.json') }),
+      (error) => error instanceof ConfigError && error.rule === 'unknown-limit',
+    )
+  } finally {
+    await tree.dispose()
+  }
+})
+
+test('two capture entries for the same URL are refused as ambiguous', async () => {
+  const tree = await makeTree({
+    'robots.txt': 'User-agent: *\nAllow: /\n',
+    'checks.json': checks([{ userAgent: 'GPTBot', url: 'https://example.com/page' }]),
+    'capture.json': JSON.stringify({
+      schemaVersion: '1',
+      responses: [
+        { url: 'https://example.com/page', headers: { 'x-robots-tag': 'noindex' } },
+        { url: 'https://example.com/page?', headers: {} },
+      ],
+    }),
+    'audit.config.json': config({ capture: 'capture.json' }),
+  })
+  try {
+    await assert.rejects(
+      auditRobotsPolicy({ configFile: join(tree.root, 'audit.config.json') }),
+      (error) => error instanceof ConfigError && error.rule === 'ambiguous-capture',
+    )
+  } finally {
+    await tree.dispose()
+  }
+})
+
+test('a report with nothing checked is never a pass, whatever its findings say', () => {
+  const empty = buildReport({ findings: [], checked: 0, incomplete: false })
+  assert.equal(empty.status, 'incomplete')
+  assert.equal(exitCodeFor(empty), 2)
+  assert.deepEqual(
+    empty.findings.map((finding) => finding.ruleId),
+    ['no-evidence'],
+  )
+
+  const withInfo = buildReport({
+    findings: [makeFinding('crawl-decision', 'a decision that decided nothing', { file: 'checks.json' })],
+    checked: 0,
+    incomplete: false,
+  })
+  assert.equal(withInfo.status, 'incomplete')
+})
+
+test('an incomplete run is never a pass even with no error-severity finding', () => {
+  const report = buildReport({
+    findings: [makeFinding('indexing-unverified', 'not verified', { file: 'checks.json', pointer: '/checks/0' })],
+    checked: 1,
+    incomplete: true,
+  })
+  assert.deepEqual(
+    { status: report.status, errors: report.summary.errors, exit: exitCodeFor(report) },
+    { status: 'incomplete', errors: 0, exit: 2 },
+  )
+})
