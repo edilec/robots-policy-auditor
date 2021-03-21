@@ -39,8 +39,10 @@ All notable changes to this project are documented in this file.
 - confinement of every declared path to the input root, checked lexically and again against the
   real path after symbolic links are followed, so neither a relative traversal nor a link planted
   inside the root can read outside it;
-- strict UTF-8 decoding, so undecodable bytes are reported rather than inferred from a replacement
-  character in already-decoded text;
+- strict UTF-8 decoding of every input — the config, checks and capture JSON documents as well as
+  robots.txt and the captured pages — so undecodable bytes are reported as `input-not-utf8` rather
+  than replaced with U+FFFD and parsed, and never inferred from a replacement character in
+  already-decoded text;
 - nine explicit limits, each overridable in `config.limits` or with `--limit NAME=VALUE`, each
   reported by name when reached, and each making the run `incomplete` instead of truncating;
 - unknown keys refused in every input document, and unknown limit names refused, rather than

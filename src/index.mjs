@@ -428,12 +428,31 @@ async function readTextBounded(file, maxBytes, limitName) {
   return { state: 'ok', text: text.startsWith('\uFEFF') ? text.slice(1) : text, bytes: info.size }
 }
 
+/**
+ * Read a JSON input and decode it as strict UTF-8.
+ *
+ * The decoder is fatal for the same reason the one above it is. `readFile(file,
+ * 'utf8')` is lossy: it turns an undecodable byte into U+FFFD and hands back a
+ * string that parses, so a capture whose `noindex` carries one stray byte
+ * becomes an unrecognised directive and the URL it protects is reported
+ * indexable — an unread input reaching a pass. JSON is defined as UTF-8
+ * (RFC 8259 section 8.1), so a document that does not decode was never read.
+ */
 async function readJsonDocument(file, label) {
-  let text
+  let bytes
   try {
-    text = await readFile(file, 'utf8')
+    bytes = await readFile(file)
   } catch (error) {
     return { state: 'unreadable', detail: `${label} could not be read (${error.code ?? 'unknown error'})` }
+  }
+  let text
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch {
+    return {
+      state: 'not-utf8',
+      detail: `${label} is not valid UTF-8 (${bytes.length} bytes could not be decoded), so it was not parsed`,
+    }
   }
   try {
     return { state: 'ok', document: JSON.parse(text) }
@@ -543,9 +562,13 @@ export async function auditRobotsPolicy({ configFile, limits: limitOverrides = {
   const checksRead = await readJsonDocument(checksPath, 'The checks document')
   if (checksRead.state !== 'ok') {
     findings.push(
-      makeFinding('input-unreadable', `${checksRead.detail}.`, { file: checksFile }, {
-        suggestion: 'point config.checks at a readable JSON checks document',
-      }),
+      checksRead.state === 'not-utf8'
+        ? makeFinding('input-not-utf8', `${checksRead.detail}.`, { file: checksFile }, {
+            suggestion: 'JSON is UTF-8 by definition; re-encode the checks document',
+          })
+        : makeFinding('input-unreadable', `${checksRead.detail}.`, { file: checksFile }, {
+            suggestion: 'point config.checks at a readable JSON checks document',
+          }),
     )
     return buildReport({
       findings,
@@ -580,9 +603,13 @@ export async function auditRobotsPolicy({ configFile, limits: limitOverrides = {
     if (captureRead.state !== 'ok') {
       incomplete = true
       findings.push(
-        makeFinding('input-unreadable', `${captureRead.detail}.`, { file: captureFile }, {
-          suggestion: 'point config.capture at a readable JSON capture, or remove it',
-        }),
+        captureRead.state === 'not-utf8'
+          ? makeFinding('input-not-utf8', `${captureRead.detail}.`, { file: captureFile }, {
+              suggestion: 'JSON is UTF-8 by definition; re-capture or re-encode the capture',
+            })
+          : makeFinding('input-unreadable', `${captureRead.detail}.`, { file: captureFile }, {
+              suggestion: 'point config.capture at a readable JSON capture, or remove it',
+            }),
       )
     } else {
       const responses = validateCapture(captureRead.document)

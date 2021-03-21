@@ -42,6 +42,12 @@ never a pass.
 Only `x-robots-tag` is read out of a capture's headers. Every other header is discarded while the
 capture is being validated, before any code that could place it in a report can see it.
 
+Every input is decoded as strict UTF-8 — the JSON documents exactly as much as `robots.txt` and the
+captured pages. A decoder that replaces an undecodable byte instead of failing would turn a capture
+carrying one stray byte into a `noindex` nobody can recognise, and the URL it protects would be
+reported indexable by a run that read nothing. A file that does not decode reports `input-not-utf8`
+and the run is `incomplete`.
+
 ## Group selection (RFC 9309 section 2.2.1)
 
 1. A group is one or more consecutive `User-agent` lines followed by its rules. A `User-agent` line
