@@ -138,7 +138,9 @@ RFC 9309, implemented as specified and documented rule by rule in
   URL that must stay private needs authentication, not a robots rule.
 - **That the captured evidence is current.** A capture is a recording made elsewhere at some past
   moment. This tool cannot verify it and will not fetch to check. A URL the capture does not cover
-  is reported unverified, and an unverified run is `incomplete`, never a pass.
+  is reported unverified, and an unverified run is `incomplete`, never a pass. Evidence a capture
+  declares but this tool could not read in full — a missing or oversized document, header values
+  bounded out — is unverified for the same reason: it is not evidence that a URL is indexable.
 - **That an agent name in a check is a real crawler.** Names are supplied by the operator and
   matched literally; a typo yields a correct decision for an agent that does not exist.
 - **Anything about another origin.** A `robots.txt` governs its own origin only. A check naming a

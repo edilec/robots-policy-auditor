@@ -29,9 +29,11 @@ All notable changes to this project are documented in this file.
   therefore removes nothing, and `directive-conflict` when a blocking and a permitting directive
   address the same agent;
 - an imported capture as the only source of indexing evidence, with no network path in the tool at
-  all; a URL the capture does not cover, an entry that declares neither headers nor a document, and
-  a time-dependent `unavailable_after` are each reported `indexing-unverified`, which makes the run
-  `incomplete` rather than a pass;
+  all; a URL the capture does not cover, an entry that declares neither headers nor a document,
+  evidence the entry declared that could not be read in full — a missing, undecodable or oversized
+  document, header values or meta elements bounded out — and a time-dependent `unavailable_after`
+  are each reported `indexing-unverified`, which makes the run `incomplete` rather than a pass, and
+  no expectation mismatch is claimed against evidence that was never obtained;
 - only `x-robots-tag` read from a capture's headers, with every other header discarded at the
   validation boundary so it cannot reach a report;
 - one frozen `ruleId -> severity` table that every finding's severity is taken from, asserted

@@ -629,9 +629,14 @@ export async function auditRobotsPolicy({ configFile, limits: limitOverrides = {
       }
       for (const response of responses) {
         const sources = []
+        // Evidence this entry declared and this run never got to read. It is
+        // not the same as evidence that was read and said nothing, and the two
+        // must not decide the same way.
+        const unread = []
 
         if (response.headerValues.length > limits.maxHeaderValues) {
           incomplete = true
+          unread.push('its X-Robots-Tag values were above the maxHeaderValues limit')
           findings.push(
             makeFinding(
               'limit-exceeded',
@@ -671,6 +676,7 @@ export async function auditRobotsPolicy({ configFile, limits: limitOverrides = {
           const htmlRead = await readTextBounded(htmlPath, limits.maxHtmlBytes, 'maxHtmlBytes')
           if (htmlRead.state === 'unreadable') {
             incomplete = true
+            unread.push('its captured document could not be read')
             findings.push(
               makeFinding('input-unreadable', `The captured document could not be read (${htmlRead.detail}).`, {
                 file: htmlFile,
@@ -678,6 +684,7 @@ export async function auditRobotsPolicy({ configFile, limits: limitOverrides = {
             )
           } else if (htmlRead.state === 'too-large') {
             incomplete = true
+            unread.push('its captured document is above the maxHtmlBytes limit')
             findings.push(
               makeFinding('input-too-large', `The captured document is ${htmlRead.detail}, so its robots meta elements were not read.`, {
                 file: htmlFile,
@@ -685,6 +692,7 @@ export async function auditRobotsPolicy({ configFile, limits: limitOverrides = {
             )
           } else if (htmlRead.state === 'not-utf8') {
             incomplete = true
+            unread.push('its captured document is not valid UTF-8')
             findings.push(
               makeFinding('input-not-utf8', `The captured document is not valid UTF-8 (${htmlRead.detail}), so its robots meta elements were not read.`, {
                 file: htmlFile,
@@ -704,6 +712,7 @@ export async function auditRobotsPolicy({ configFile, limits: limitOverrides = {
             }
             if (extracted.truncated !== null) {
               incomplete = true
+              unread.push(`its captured document was truncated at the ${extracted.truncated.limit} limit`)
               findings.push(
                 makeFinding(
                   'limit-exceeded',
@@ -744,7 +753,7 @@ export async function auditRobotsPolicy({ configFile, limits: limitOverrides = {
         // directives were served". An explicit `"headers": {}` is the way to
         // state that the response carried none.
         const declaresEvidence = response.declaresHeaders || response.html !== null
-        capture.set(response.key, { response, sources, declaresEvidence })
+        capture.set(response.key, { response, sources, declaresEvidence, unread })
       }
     }
   }
@@ -797,20 +806,31 @@ export async function auditRobotsPolicy({ configFile, limits: limitOverrides = {
       entry === null ? [] : entry.sources.filter((source) => addressesAgent(source.agent, check.userAgent))
     const indexing = entry === null ? { state: 'unknown', winner: null, conflicting: null } : decideIndexing(applicable)
 
-    const indexState = indexing.state
-    if (entry === null) {
+    // Evidence that was declared but never read — a document that is missing,
+    // undecodable or above its byte limit, header values or meta elements
+    // bounded out — cannot show that a URL is indexable. "No directive was
+    // found" and "no directive was looked at" are different answers, and
+    // reporting the second as the first invents both an indexing verdict and
+    // the expectation mismatch that follows from it. A directive that *was*
+    // read and says noindex still decides: nothing unread could lift it.
+    const unreadEvidence = entry !== null && entry.unread.length > 0 && indexing.state === 'indexable'
+    const indexState = unreadEvidence ? 'unknown' : indexing.state
+    if (indexState === 'unknown') {
       indexUnverified += 1
       incomplete = true
       findings.push(
         makeFinding(
           'indexing-unverified',
-          found === null
-            ? `No captured response covers ${excerpt(captureKey(url)).slice(0, 80)}, so the indexing directives for "${excerpt(check.userAgent).slice(0, 40)}" are unknown. Crawl permission below is decided; indexing is not.`
-            : `The captured response for ${excerpt(captureKey(url)).slice(0, 80)} declares neither headers nor a document, so it states nothing about indexing for "${excerpt(check.userAgent).slice(0, 40)}". Silence is not evidence that no directive was served.`,
+          unreadEvidence
+            ? `The captured response for ${excerpt(captureKey(url)).slice(0, 80)} was not fully read (${entry.unread.join('; ')}), so the indexing directives for "${excerpt(check.userAgent).slice(0, 40)}" are unknown. Evidence nobody read cannot show a URL is indexable.`
+            : found === null
+              ? `No captured response covers ${excerpt(captureKey(url)).slice(0, 80)}, so the indexing directives for "${excerpt(check.userAgent).slice(0, 40)}" are unknown. Crawl permission below is decided; indexing is not.`
+              : `The captured response for ${excerpt(captureKey(url)).slice(0, 80)} declares neither headers nor a document, so it states nothing about indexing for "${excerpt(check.userAgent).slice(0, 40)}". Silence is not evidence that no directive was served.`,
           { file: checksFile, pointer },
           {
-            suggestion:
-              found !== null
+            suggestion: unreadEvidence
+              ? 'make that evidence readable, or raise the limit the finding above names, then run again'
+              : found !== null
                 ? 'declare "headers": {} on that response to state that it carried no X-Robots-Tag, or capture its document'
                 : captureLoaded
                   ? 'add this URL to the capture, header and document alike'

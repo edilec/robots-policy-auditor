@@ -39,6 +39,13 @@ reaches it only as an imported capture recorded elsewhere, and a URL the capture
 an **unknown** indexing state, reported as `indexing-unverified` — which makes the run `incomplete`,
 never a pass.
 
+Evidence a capture *declares* is not evidence this tool *read*. A captured document that is missing,
+undecodable or above `maxHtmlBytes`, header values above `maxHeaderValues`, meta elements cut off at
+`maxMetaTags` — each leaves the directive list empty for a reason that says nothing about the site,
+so the indexing state is **unknown**, not `indexable`, and no `index-expectation-mismatch` is claimed
+against it. A directive that *was* read and says `noindex` still decides: nothing still unread could
+lift it.
+
 Only `x-robots-tag` is read out of a capture's headers. Every other header is discarded while the
 capture is being validated, before any code that could place it in a report can see it.
 
@@ -128,7 +135,7 @@ captured document.
 | `duplicate-group` | info | One product token heads more than one group. The records are merged, as RFC 9309 requires. |
 | `empty-group` | info | A group declares no rule, so every URL is crawlable for the agents it names. |
 | `index-expectation-mismatch` | error | A check declared `expect.index` and the captured directives decided the other way. |
-| `indexing-unverified` | warning | The indexing axis could not be decided: no capture covers the URL, the capture entry states nothing, or the directive depends on the time. The run is incomplete. |
+| `indexing-unverified` | warning | The indexing axis could not be decided: no capture covers the URL, the capture entry states nothing, the evidence it declared could not be read in full, or the directive depends on the time. The run is incomplete. |
 | `input-not-utf8` | error | A file's bytes could not be decoded as UTF-8, so it was not parsed. |
 | `input-too-large` | error | A file exceeded its byte limit, so it was not parsed. |
 | `input-unreadable` | error | A declared file could not be read or was not valid JSON. |
