@@ -160,26 +160,92 @@ for (const scenario of UNREAD) {
  * The rule only runs one way. A directive that *was* read and says noindex
  * decides the URL blocked, because nothing still unread could lift it — the
  * restrictive reading is the one an auditor must assume.
+ *
+ * These fixtures also isolate the `incomplete` flag on each unread path. With
+ * the indexing axis decided, the unread input is the only thing left that keeps
+ * the run from a verdict: drop the flag and an `error`-severity finding turns
+ * the run into `fail` / exit 1, when the honest answer is that an input was
+ * never read.
  */
-test('a noindex that was read still decides, even beside evidence that was not', async () => {
-  const report = await audit({
-    'robots.txt': OPEN_ROBOTS,
-    'checks.json': EXPECTS_BLOCKED,
-    'capture.json': capture({ headers: { 'x-robots-tag': 'noindex' }, html: 'capture/missing.html' }),
-    'audit.config.json': config(),
-  })
+const DECIDED_BUT_PARTIAL = [
+  {
+    name: 'a captured document that is not there',
+    files: { 'capture.json': capture({ headers: { 'x-robots-tag': 'noindex' }, html: 'capture/missing.html' }) },
+    limits: {},
+    rule: 'input-unreadable',
+  },
+  {
+    name: 'a captured document above its byte limit',
+    files: {
+      'capture/page.html': `<html><head>${'<!-- padding -->'.repeat(40)}</head></html>`,
+      'capture.json': capture({ headers: { 'x-robots-tag': 'noindex' }, html: 'capture/page.html' }),
+    },
+    limits: { maxHtmlBytes: 64 },
+    rule: 'input-too-large',
+  },
+  {
+    name: 'a captured document whose bytes are not UTF-8',
+    files: {
+      'capture/page.html': Buffer.from([0x3c, 0x68, 0x74, 0x6d, 0x6c, 0xc3, 0x28]),
+      'capture.json': capture({ headers: { 'x-robots-tag': 'noindex' }, html: 'capture/page.html' }),
+    },
+    limits: {},
+    rule: 'input-not-utf8',
+  },
+  {
+    name: 'X-Robots-Tag values above the maxHeaderValues limit',
+    files: {
+      'capture/page.html': '<html><head><meta name="robots" content="noindex"></head></html>',
+      'capture.json': capture({
+        headers: { 'x-robots-tag': ['index', 'index', 'index', 'index'] },
+        html: 'capture/page.html',
+      }),
+    },
+    limits: { maxHeaderValues: 2 },
+    rule: 'limit-exceeded',
+  },
+  {
+    name: 'meta elements cut off at the maxMetaTags limit',
+    files: {
+      'capture/page.html': `<html><head>\n${[
+        '<meta name="robots" content="noindex">',
+        '<meta name="robots" content="index">',
+        '<meta name="robots" content="index">',
+        '<meta name="robots" content="index">',
+      ].join('\n')}\n</head></html>`,
+      'capture.json': capture({ html: 'capture/page.html' }),
+    },
+    limits: { maxMetaTags: 2 },
+    rule: 'limit-exceeded',
+  },
+]
 
-  assert.equal(report.summary.indexBlocked, 1)
-  assert.equal(report.summary.indexUnverified, 0)
-  assert.ok(!ruleIds(report).includes('index-expectation-mismatch'))
-  assert.match(
-    report.findings.find((finding) => finding.ruleId === 'crawl-decision').message,
-    /index=blocked/,
-  )
-  // The unreadable document is still reported, and still makes the run incomplete.
-  assert.equal(report.status, 'incomplete')
-  assert.ok(ruleIds(report).includes('input-unreadable'))
-})
+for (const scenario of DECIDED_BUT_PARTIAL) {
+  test(`a noindex that was read decides, and ${scenario.name} still makes the run incomplete`, async () => {
+    const report = await audit(
+      {
+        'robots.txt': OPEN_ROBOTS,
+        'checks.json': EXPECTS_BLOCKED,
+        'audit.config.json': config(),
+        ...scenario.files,
+      },
+      scenario.limits,
+    )
+
+    assert.equal(report.summary.indexBlocked, 1)
+    assert.equal(report.summary.indexUnverified, 0)
+    assert.ok(!ruleIds(report).includes('index-expectation-mismatch'))
+    assert.match(
+      report.findings.find((finding) => finding.ruleId === 'crawl-decision').message,
+      /index=blocked/,
+    )
+    // The unread input is reported, and it is the only thing left that keeps
+    // this run from a verdict: `incomplete`, not `fail`.
+    assert.ok(ruleIds(report).includes(scenario.rule))
+    assert.equal(report.status, 'incomplete')
+    assert.equal(exitCodeFor(report), 2)
+  })
+}
 
 /**
  * And the over-correction it must not become: evidence that was read in full

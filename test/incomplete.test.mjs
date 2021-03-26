@@ -14,8 +14,25 @@ import { auditRobotsPolicy, exitCodeFor } from '../src/index.mjs'
  * still green. Each test below asserts the status is exactly `incomplete`, so
  * removing the flag turns the run into `pass` or `fail` and the test fails.
  *
+ * That only holds if the fixture has *one* source of incompleteness. A fixture
+ * with no capture is unverified on the indexing axis as well, and that second
+ * flag masks the one under test: delete the line the test is named after and
+ * the run is still incomplete, still exit 2, still green. So every fixture here
+ * verifies everything it is not testing — `VERIFIED_CAPTURE` states that the
+ * response carried no `X-Robots-Tag`, which decides the indexing axis — and the
+ * flag under test is then the only one left.
+ *
  * The three cases whose finding is only a *warning* are marked: for those, the
  * flag is the sole thing standing between the run and a green build.
+ *
+ * Four of the seventeen assignments are redundant rather than untested, and no
+ * fixture can isolate them: an unreadable checks document and a checks list over
+ * `maxChecks` both report `checked === 0`, which `buildReport` refuses to pass on
+ * its own, and an unreadable capture and a capture over `maxCaptureEntries` both
+ * leave every check's indexing axis unverified, which sets the flag again a few
+ * lines later. Deleting any of those four changes no byte of any report. They
+ * stay because the guarantee should not depend on a second guard holding, and
+ * the behaviour they back is asserted below all the same.
  */
 
 async function makeTree(files) {
@@ -45,6 +62,16 @@ function checks(entries) {
 const ONE_CHECK = checks([{ userAgent: 'GPTBot', url: 'https://example.com/page' }])
 const OPEN_ROBOTS = 'User-agent: *\nAllow: /\n'
 
+/**
+ * A capture that decides the indexing axis for /page: an explicit empty headers
+ * object states that the response carried no `X-Robots-Tag`. A fixture carrying
+ * this has nothing unverified about it except what its test is about.
+ */
+const VERIFIED_CAPTURE = JSON.stringify({
+  schemaVersion: '1',
+  responses: [{ url: 'https://example.com/page', headers: {} }],
+})
+
 async function audit(files, limits = {}) {
   const tree = await makeTree(files)
   try {
@@ -59,7 +86,14 @@ function ruleIds(report) {
 }
 
 test('a robots.txt that is not there is incomplete, never a pass', async () => {
-  const report = await audit({ 'checks.json': ONE_CHECK, 'audit.config.json': config() })
+  const report = await audit({
+    'checks.json': ONE_CHECK,
+    'capture.json': VERIFIED_CAPTURE,
+    'audit.config.json': config({ capture: 'capture.json' }),
+  })
+  // Everything else about this run is decided, so the unread robots.txt is the
+  // only thing keeping it from a verdict: without the flag it reports `fail`.
+  assert.equal(report.summary.indexUnverified, 0)
   assert.equal(report.status, 'incomplete')
   assert.equal(exitCodeFor(report), 2)
   assert.ok(ruleIds(report).includes('input-unreadable'))
@@ -81,11 +115,16 @@ test('a robots.txt that is a directory is incomplete, never a pass', async () =>
 })
 
 test('a robots.txt whose bytes are not UTF-8 is incomplete, never a pass', async () => {
-  const tree = await makeTree({ 'checks.json': ONE_CHECK, 'audit.config.json': config() })
+  const tree = await makeTree({
+    'checks.json': ONE_CHECK,
+    'capture.json': VERIFIED_CAPTURE,
+    'audit.config.json': config({ capture: 'capture.json' }),
+  })
   try {
     // A lone 0xFF can begin no UTF-8 sequence, so the decode fails outright.
     await writeFile(join(tree.root, 'robots.txt'), Buffer.from([0x55, 0x73, 0x65, 0x72, 0xff, 0x0a]))
     const report = await auditRobotsPolicy({ configFile: join(tree.root, 'audit.config.json') })
+    assert.equal(report.summary.indexUnverified, 0)
     assert.equal(report.status, 'incomplete')
     assert.equal(exitCodeFor(report), 2)
     assert.ok(ruleIds(report).includes('input-not-utf8'))
@@ -118,10 +157,17 @@ test('a valid UTF-8 robots.txt containing U+FFFD is still parsed and can pass', 
 
 test('a robots.txt above its byte limit is incomplete, never a pass', async () => {
   const report = await audit(
-    { 'robots.txt': `${OPEN_ROBOTS}${'#'.repeat(500)}`, 'checks.json': ONE_CHECK, 'audit.config.json': config() },
+    {
+      'robots.txt': `${OPEN_ROBOTS}${'#'.repeat(500)}`,
+      'checks.json': ONE_CHECK,
+      'capture.json': VERIFIED_CAPTURE,
+      'audit.config.json': config({ capture: 'capture.json' }),
+    },
     { maxRobotsBytes: 32 },
   )
+  assert.equal(report.summary.indexUnverified, 0)
   assert.equal(report.status, 'incomplete')
+  assert.equal(exitCodeFor(report), 2)
   assert.ok(ruleIds(report).includes('input-too-large'))
 })
 
@@ -319,9 +365,12 @@ test('a check that names no absolute URL is incomplete, never a pass', async () 
       { userAgent: 'GPTBot', url: '/relative/path' },
       { userAgent: 'GPTBot', url: 'https://example.com/page' },
     ]),
-    'audit.config.json': config(),
+    'capture.json': VERIFIED_CAPTURE,
+    'audit.config.json': config({ capture: 'capture.json' }),
   })
+  assert.equal(report.summary.indexUnverified, 0)
   assert.equal(report.status, 'incomplete')
+  assert.equal(exitCodeFor(report), 2)
   assert.equal(report.summary.checked, 1)
   assert.equal(report.findings.find((finding) => finding.ruleId === 'check-unevaluable').location.pointer, '/checks/0')
 })
@@ -333,9 +382,12 @@ test('a check on another origin is incomplete, never a pass', async () => {
       { userAgent: 'GPTBot', url: 'https://other.example.net/page' },
       { userAgent: 'GPTBot', url: 'https://example.com/page' },
     ]),
-    'audit.config.json': config(),
+    'capture.json': VERIFIED_CAPTURE,
+    'audit.config.json': config({ capture: 'capture.json' }),
   })
+  assert.equal(report.summary.indexUnverified, 0)
   assert.equal(report.status, 'incomplete')
+  assert.equal(exitCodeFor(report), 2)
   assert.equal(report.summary.checked, 1)
   assert.match(
     report.findings.find((finding) => finding.ruleId === 'check-unevaluable').message,
