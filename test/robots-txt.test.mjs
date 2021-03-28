@@ -293,6 +293,39 @@ test('group selection reports whether the agent, the global group or nothing mat
   assert.equal(selectGroups(parse('User-agent: onlybot\nDisallow: /').groups, 'otherbot').match, 'none')
 })
 
+/**
+ * RFC 9309 section 2.2.1: a product token is compared in full. Prefix or
+ * substring matching is the failure that silently hands one agent another
+ * agent's rules — `GPTBot` governed by the group written for `GPTBot-Image`,
+ * or `ExampleBot` by the group written for `Example` — and it flips real crawl
+ * decisions in both directions, which is why both are asserted here.
+ */
+test('a product token is compared in full, never as a prefix', () => {
+  const longerToken = ['User-agent: GPTBot-Image', 'Disallow: /', '', 'User-agent: *', 'Allow: /'].join('\n')
+  const shorterToken = ['User-agent: Example', 'Disallow: /', '', 'User-agent: *', 'Allow: /'].join('\n')
+
+  // The group's token extends past the agent's name: not this agent's group.
+  const other = decide(longerToken, 'GPTBot', 'https://example.com/page')
+  assert.equal(other.agentMatch, 'global')
+  assert.equal(other.permission, 'allow')
+  // The agent's name extends past the group's token: still not its group.
+  const longer = decide(shorterToken, 'ExampleBot', 'https://example.com/page')
+  assert.equal(longer.agentMatch, 'global')
+  assert.equal(longer.permission, 'allow')
+  // And the agent the group was written for is governed by it.
+  const own = decide(longerToken, 'GPTBot-Image', 'https://example.com/page')
+  assert.equal(own.agentMatch, 'specific')
+  assert.equal(own.permission, 'disallow')
+
+  const groups = parse(longerToken).groups
+  assert.equal(selectGroups(groups, 'GPTBot').match, 'global')
+  assert.equal(selectGroups(groups, 'GPTBot-Image').match, 'specific')
+  // In full, but not case-sensitively: the comparison must not over-correct
+  // into refusing a token that differs only in case.
+  assert.equal(selectGroups(groups, 'gptbot-image').match, 'specific')
+  assert.equal(decide(longerToken, 'gptbot-image', 'https://example.com/page').permission, 'disallow')
+})
+
 test('syntax problems are reported with the line that produced them', () => {
   const text = [
     'Disallow: /orphan',
