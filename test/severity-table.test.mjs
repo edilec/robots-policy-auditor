@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-import { RULE_SEVERITY, SEVERITIES, makeFinding, severityOf } from '../src/index.mjs'
+import { RULE_SEVERITY, SEVERITIES, byCodeUnit, makeFinding, severityOf } from '../src/index.mjs'
 
 const projectDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -102,6 +102,8 @@ test('the table is frozen and every severity it uses is one the contract defines
 
 test('the catalog is listed in sorted order, so a new rule lands where it is looked for', () => {
   const listed = Object.keys(RULE_SEVERITY)
-  const sorted = [...listed].sort((left, right) => (left === right ? 0 : left < right ? -1 : 1))
+  // Sorted by the comparator the reports themselves use, not by a second one
+  // written here that could drift away from it.
+  const sorted = [...listed].sort(byCodeUnit)
   assert.deepEqual(listed, sorted)
 })

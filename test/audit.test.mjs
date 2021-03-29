@@ -9,6 +9,7 @@ import {
   ConfigError,
   auditRobotsPolicy,
   buildReport,
+  byCodeUnit,
   comparePointers,
   exitCodeFor,
   makeFinding,
@@ -158,6 +159,48 @@ test('an array pointer is ordered by its index, not by its spelling', () => {
   )
   assert.equal(comparePointers('/checks/2', '/checks/10'), -1)
   assert.equal(comparePointers('/line/0002', '/line/0010'), -1)
+})
+
+/**
+ * Ordering is by UTF-16 code unit, and the point of saying so is that it is
+ * *not* `localeCompare`. Collation consults ICU data that differs between Node
+ * builds, so a report ordered by it is reproducible on one machine and not on
+ * the next — and the same two runs this suite compares byte for byte would
+ * still agree, because they run in the same process.
+ *
+ * Every pair below is one the two orderings disagree about, so the assertions
+ * fail the moment `byCodeUnit` starts consulting a locale.
+ */
+test('ordering is by UTF-16 code unit, never by locale collation', () => {
+  // Uppercase precedes lowercase by code unit; collation folds case and puts
+  // these the other way round.
+  assert.equal(byCodeUnit('Z', 'a'), -1)
+  // "-" (U+002D) precedes "_" (U+005F); collation weighs punctuation
+  // separately and puts these the other way round too.
+  assert.equal(byCodeUnit('a-b', 'a_b'), -1)
+  assert.equal(byCodeUnit('a', 'a'), 0)
+  assert.equal(byCodeUnit('b', 'a'), 1)
+
+  // The same disagreement through the exported sort, on each key it uses.
+  const byFile = sortFindings(
+    ['capture/a_b.html', 'capture/a-b.html', 'capture/A-c.html'].map((file) =>
+      makeFinding('crawl-decision', 'x', { file }),
+    ),
+  )
+  assert.deepEqual(
+    byFile.map((finding) => finding.location.file),
+    ['capture/A-c.html', 'capture/a-b.html', 'capture/a_b.html'],
+  )
+  const byMessage = sortFindings(
+    ['apple', 'Zebra'].map((message) => makeFinding('crawl-decision', message, { file: 'checks.json' })),
+  )
+  assert.deepEqual(
+    byMessage.map((finding) => finding.message),
+    ['Zebra', 'apple'],
+  )
+  // comparePointers falls back on the same comparator for a non-numeric
+  // segment, so it inherits the guarantee rather than restating it.
+  assert.equal(comparePointers('/Z/1', '/a/1'), -1)
 })
 
 test('running twice over identical inputs produces byte-identical output', async () => {
