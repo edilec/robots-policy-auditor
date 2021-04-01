@@ -11,6 +11,7 @@ import {
   buildReport,
   byCodeUnit,
   comparePointers,
+  excerpt,
   exitCodeFor,
   makeFinding,
   sortFindings,
@@ -317,21 +318,71 @@ test('a header carrying anything but X-Robots-Tag never reaches the report', asy
   }
 })
 
+/**
+ * Control characters written as escapes, never as literals: a raw U+2028 in a
+ * source file is invisible, and one pasted somewhere worse is a defect waiting
+ * to happen. ESC opens a terminal escape sequence, NUL truncates a C string,
+ * and U+2028 / U+2029 end a line for some parsers — all of them let input
+ * content forge structure in whatever reads the report.
+ */
+const CONTROL_CHARACTERS = '\u001b[31m\u0000\u007f\u2028\u2029'
+
+/** Every string anywhere in a report, so nothing hides in a field this test forgot. */
+function allStrings(value) {
+  if (typeof value === 'string') return [value]
+  if (Array.isArray(value)) return value.flatMap(allStrings)
+  if (value !== null && typeof value === 'object') return Object.values(value).flatMap(allStrings)
+  return []
+}
+
 test('evidence from an input is bounded and stripped of control characters', async () => {
+  const longPath = 'a'.repeat(400)
   const tree = await makeTree({
-    'robots.txt': `User-agent: *\nDisallow: /${'a'.repeat(400)}\n`,
-    'checks.json': checks([{ userAgent: 'GPTBot', url: `https://example.com/${'a'.repeat(400)}` }]),
-    'audit.config.json': config(),
+    'robots.txt': `User-agent: *\nDisallow: /${longPath}\n`,
+    'checks.json': checks([{ userAgent: 'GPTBot', url: `https://example.com/${longPath}` }]),
+    'capture.json': JSON.stringify({
+      schemaVersion: '1',
+      responses: [
+        {
+          url: `https://example.com/${longPath}`,
+          headers: { 'x-robots-tag': `noindex${CONTROL_CHARACTERS}` },
+        },
+      ],
+    }),
+    'audit.config.json': config({ capture: 'capture.json' }),
   })
   try {
     const report = await auditRobotsPolicy({ configFile: join(tree.root, 'audit.config.json') })
+
     for (const finding of report.findings) {
       if (finding.evidence === undefined) continue
       assert.ok(finding.evidence.length <= 203, `evidence was ${finding.evidence.length} characters`)
     }
+
+    // The header value reached the report — so the rest of this test is about
+    // what was removed from it, not about a fixture that never arrived.
+    const directive = report.findings.find((finding) => finding.ruleId === 'unknown-index-directive')
+    assert.ok(directive, 'the mangled directive must be reported')
+    assert.ok(directive.evidence.includes('[31m'), 'the directive text itself must survive')
+
+    for (const text of allStrings(report)) {
+      const offending = [...text].findIndex((character) => {
+        const code = character.codePointAt(0)
+        return code < 0x20 || code === 0x7f || code === 0x2028 || code === 0x2029
+      })
+      assert.equal(offending, -1, `a control character reached the report in ${JSON.stringify(text)}`)
+    }
   } finally {
     await tree.dispose()
   }
+})
+
+test('excerpt replaces every control character it is given', () => {
+  assert.equal(excerpt(`no index${CONTROL_CHARACTERS}`), 'no index [31m')
+  assert.equal(excerpt('one\ttwo\nthree'), 'one two three')
+  // A bare replacement character is printable text and is kept as it is.
+  assert.equal(excerpt('caf\uFFFD'), 'caf\uFFFD')
+  assert.equal(excerpt('a'.repeat(400)).length, 203)
 })
 
 test('an unknown configuration key is refused rather than ignored', async () => {
