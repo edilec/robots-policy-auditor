@@ -138,7 +138,7 @@ captured document.
 | `indexing-unverified` | warning | The indexing axis could not be decided: no capture covers the URL, the capture entry states nothing, the evidence it declared could not be read in full, or the directive depends on the time. The run is incomplete. |
 | `input-not-utf8` | error | A file's bytes could not be decoded as UTF-8, so it was not parsed. |
 | `input-too-large` | error | A file exceeded its byte limit, so it was not parsed. |
-| `input-unreadable` | error | A declared file could not be read or was not valid JSON. |
+| `input-unreadable` | error | A declared file could not be read or was not valid JSON. A parse failure is reported by position, line, column and offending token, never by the text at them. |
 | `invalid-rule-path` | warning | A rule value begins with neither `/` nor `*`, which RFC 9309 does not define. The rule is ignored. |
 | `invalid-user-agent` | warning | A `User-agent` line names no usable product token, so the group it opens can never be selected. |
 | `limit-exceeded` | error | A documented limit was reached. Parsing stopped; nothing was silently truncated. |
@@ -196,6 +196,13 @@ began and stopped.
 Evidence excerpts are bounded at 200 characters and stripped of control characters. Input content
 is data: it is never emitted at full length and never placed where it could be mistaken for an
 instruction.
+
+A parse failure is the one place where bounding was not enough, and it is handled separately.
+V8 quotes the input back inside its own message — `Unexpected token 'A', "AKIAIOSFODNN7EXAMPLE"
+is not valid JSON` — at the *front*, where a cut from the end leaves it, so a document short
+enough to be nothing but a credential was reproduced in full by its own error. `input-unreadable`
+now reports the position, line, column and offending token of the failure and never the text at
+them.
 
 ## Report shape and determinism
 

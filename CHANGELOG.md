@@ -58,4 +58,18 @@ All notable changes to this project are documented in this file.
 - the rule catalog, matching rules, refusals, limits, report shape, determinism guarantee and an
   explicit statement of what the tool cannot conclude, in `docs/robots-rules.md`.
 
+### Fixed
+
+- A parse failure no longer quotes the document it failed on. V8 writes
+  `Unexpected token 'A', "AKIAIOSFODNN7EXAMPLE" is not valid JSON`, and `readJsonDocument`
+  interpolated that message for the config, the checks document and the capture alike, so a
+  document short enough to be nothing but a credential was reproduced in full — in the report on
+  stdout, in the human summary on stderr, and in the config refusal on stderr. `excerpt` never
+  helped, since it cuts from the end and the quoted span is at the front, which is also why the
+  "never emitted at full length" line in `docs/robots-rules.md` was not true of this one path.
+  The diagnostic now carries the position, line, column and offending token and never the text at
+  them, and `test/parse-failure-redaction.test.mjs` drives the AWS documentation placeholder
+  through the real CLI and asserts it absent from stdout, from stderr and from every prefix down
+  to eight characters.
+
 No release has been published.

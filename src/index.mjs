@@ -19,7 +19,7 @@ import {
   extractMetaRobots,
   parseXRobotsTag,
 } from './directives.mjs'
-import { CONFIG_SCHEMA_VERSION, buildReport, excerpt, makeFinding } from './report.mjs'
+import { CONFIG_SCHEMA_VERSION, buildReport, excerpt, makeFinding, parseFailureDetail } from './report.mjs'
 import { decideCrawl, parseRobotsTxt } from './robots-txt.mjs'
 
 export {
@@ -43,6 +43,7 @@ export {
   exitCodeFor,
   formatReport,
   makeFinding,
+  parseFailureDetail,
   severityOf,
   sortFindings,
 } from './report.mjs'
@@ -457,7 +458,7 @@ async function readJsonDocument(file, label) {
   try {
     return { state: 'ok', document: JSON.parse(text) }
   } catch (error) {
-    return { state: 'unreadable', detail: `${label} is not valid JSON: ${excerpt(error.message).slice(0, 120)}` }
+    return { state: 'unreadable', detail: `${label} is not valid JSON: ${excerpt(parseFailureDetail(error)).slice(0, 120)}` }
   }
 }
 
