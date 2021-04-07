@@ -126,3 +126,99 @@ test('parseFailureDetail keeps the position and drops the quoted input', () => {
   assert.equal(parseFailureDetail(caught('')), 'Unexpected end of JSON input')
   assert.equal(parseFailureDetail(undefined), 'the document could not be parsed as JSON')
 })
+
+/**
+ * Ordering pin: the quoting shape must be recognised BEFORE the offset.
+ *
+ * A helper that searches for `at position` first finds that phrase inside the
+ * quoted span whenever the document itself supplies it, and slices the
+ * document straight back out. The first case below is the one that bites when
+ * the two branches are swapped back, and it takes two assertions to bite:
+ * whether the document survives, AND whether the diagnostic does. The closing
+ * double-quote guard turns a reverted ordering into the generic sentence
+ * rather than a leak, so a test that only looked for the leak would sit green
+ * over a helper that had stopped saying anything at all about this document.
+ *
+ * The last two cases pin that same opposite failure for the shapes V8 writes
+ * without a quoted span. A helper that answered every message generically
+ * would leak nothing and diagnose nothing.
+ */
+
+const ORDERING_SECRET = 'sk-live-9f2c1b7a4d'
+
+/** The detail this tool produces for a document V8 refuses. */
+function detailOfParseFailure(text) {
+  try {
+    JSON.parse(text)
+  } catch (error) {
+    return parseFailureDetail(error)
+  }
+  throw new Error(`${JSON.stringify(text)} parsed, so it pins nothing`)
+}
+
+/** What V8 actually said, so a case cannot quietly stop having a subject. */
+function messageOfParseFailure(text) {
+  try {
+    JSON.parse(text)
+  } catch (error) {
+    return error.message
+  }
+  throw new Error(`${JSON.stringify(text)} parsed, so it pins nothing`)
+}
+
+test('a document that merely CONTAINS "at position" is not sliced back out', () => {
+  const document = 'at position 1'
+  assert.match(
+    messageOfParseFailure(document),
+    /"at position 1"/,
+    'V8 still quotes this document back, so this case still has a subject',
+  )
+
+  const detail = detailOfParseFailure(document)
+  assert.equal(detail.includes('"'), false, `a double quote survived: ${JSON.stringify(detail)}`)
+  assert.equal(detail.includes(document), false, `the document survived: ${JSON.stringify(detail)}`)
+  assert.match(
+    detail,
+    /unexpected token 'a'/,
+    'the offending token is still named -- searching for the offset first loses it here',
+  )
+})
+
+test('a document that is nothing but a credential-shaped token is not echoed', () => {
+  const detail = detailOfParseFailure(ORDERING_SECRET)
+  assert.equal(detail.includes(ORDERING_SECRET), false, `the token survived: ${JSON.stringify(detail)}`)
+  assert.equal(detail.includes('"'), false)
+})
+
+test('no four-character prefix of a long sensitive document reaches the detail', () => {
+  // Long enough that V8 quotes a ten-character window rather than the whole
+  // document: asserting only on the whole string would pass while ten
+  // characters of the secret still shipped.
+  const detail = detailOfParseFailure(`${ORDERING_SECRET}${'x'.repeat(400)}`)
+  for (let length = 4; length <= 10; length += 1) {
+    assert.equal(
+      detail.includes(ORDERING_SECRET.slice(0, length)),
+      false,
+      `the first ${length} characters of the document survived: ${JSON.stringify(detail)}`,
+    )
+  }
+  assert.equal(detail.includes('"'), false)
+})
+
+test('a quoted span containing a newline is still recognised as a quoted span', () => {
+  // Without the `s` flag the quoted-span pattern does not match this message
+  // at all and the document falls through to a branch that keeps it.
+  const detail = detailOfParseFailure('}x\n')
+  assert.match(detail, /unexpected token/)
+  assert.equal(detail.includes('"'), false, `a double quote survived: ${JSON.stringify(detail)}`)
+})
+
+test('the genuinely safe positional form keeps its position, line and column', () => {
+  const detail = detailOfParseFailure('{"a": 1 "b": 2}')
+  assert.match(detail, /at position 8/)
+  assert.match(detail, /line 1 column 9/)
+})
+
+test('"Unexpected end of JSON input" passes through unchanged', () => {
+  assert.equal(detailOfParseFailure(''), 'Unexpected end of JSON input')
+})
