@@ -112,21 +112,49 @@ export function excerpt(text) {
  * defence here: it replaces control characters and cuts from the end, and the
  * quoted span sits at the front.
  *
+ * The quoting shape is recognised FIRST, and that ordering is the whole fix.
+ * Searching for the offset first finds `at position 1` INSIDE the quoted span
+ * whenever the document itself contains that text, and then slices the
+ * document straight back out: a checks document reading `at position 1` came
+ * back as `Unexpected token 'a', "at position 1`.
+ *
  * Position, line and column are the useful half and carry no document content,
- * so they are kept verbatim; so is the offending token, one character wide and
- * bounded here to stay that way. V8 has a third spelling for a failure further
- * into the document, `..."checks": AKIAIOSFOD"...`, which quotes a window
- * rather than a prefix and carries no position at all; that one keeps only the
- * token. The quoted half never leaves this function.
+ * so they are kept verbatim when V8 offers them on their own. The quoted half
+ * never leaves this function. The closing guard is deliberate belt and braces:
+ * every parse message V8 emits without a quoted snippet spells JSON
+ * punctuation with apostrophes and carries no double quote at all, so a double
+ * quote surviving to the end means a snippet survived with it, whatever the
+ * branches above concluded, and the generic sentence is returned instead.
  */
 export function parseFailureDetail(error) {
-  const message = String(error?.message ?? 'could not be parsed')
-  const position = /at position \d+(?: \(line \d+ column \d+\))?/.exec(message)
-  if (position) return message.slice(0, position.index + position[0].length)
-  const token = /^Unexpected token (.{1,8}?), (\.\.\.)?".*?"(?:\.\.\.)? is not valid JSON$/s.exec(message)
-  if (token) return token[2] === undefined ? `unexpected token ${token[1]} at the start of the document` : `unexpected token ${token[1]}`
-  if (/^Unexpected end of JSON input$/.test(message)) return message
-  return 'the document could not be parsed as JSON'
+  const message = String(error?.message ?? '')
+  const detail = describeParseFailure(message)
+  return detail.includes('"') ? UNPARSEABLE : detail
+}
+
+const UNPARSEABLE = 'the document could not be parsed as JSON'
+
+/** Where V8 puts the offending offset. Safe: an offset says nothing about content. */
+const POSITION = /at position \d+(?: \(line \d+ column \d+\))?/
+
+/**
+ * The shape that quotes the input. A leading `...` means the quoted run was
+ * taken from the middle of the document rather than its start, which is the
+ * only thing about the position this shape reveals. The `s` flag matters too:
+ * the quoted span can contain a newline.
+ */
+const QUOTES_THE_INPUT = /^Unexpected token (.+?), (\.\.\.)?".*"(?:\.\.\.)? is not valid JSON$/s
+
+function describeParseFailure(message) {
+  const quoting = QUOTES_THE_INPUT.exec(message)
+  if (quoting !== null) {
+    const where = quoting[2] === undefined ? 'at the start of the document' : 'inside the document'
+    return `unexpected token ${quoting[1]} ${where}`
+  }
+  const position = POSITION.exec(message)
+  if (position !== null) return message.slice(0, position.index + position[0].length)
+  if (message === 'Unexpected end of JSON input') return message
+  return UNPARSEABLE
 }
 
 /**
