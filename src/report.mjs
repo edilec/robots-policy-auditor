@@ -51,14 +51,20 @@ export const RULE_SEVERITY = Object.freeze({
 export const EVIDENCE_LIMIT = 200
 
 /**
- * Control characters that would let input content forge report structure.
+ * Control and bidirectional formatting characters that would let input
+ * content forge report structure or change how a finding appears.
  *
  * Written as code points rather than escapes in a regular expression: a
  * literal U+2028 inside a regex literal is a syntax error, and an invisible
  * one in source is a defect waiting to be pasted somewhere worse.
  */
 function isUnprintable(code) {
-  return code < 0x20 || code === 0x7f || code === 0x2028 || code === 0x2029
+  return code < 0x20 ||
+    (code >= 0x7f && code <= 0x9f) ||
+    (code >= 0x200e && code <= 0x200f) ||
+    code === 0x2028 || code === 0x2029 ||
+    (code >= 0x202a && code <= 0x202e) ||
+    (code >= 0x2066 && code <= 0x2069)
 }
 
 /**

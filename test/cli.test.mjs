@@ -59,6 +59,68 @@ test('stdout carries the report and nothing else, while the summary goes to stde
   assert.match(result.stderr, /crawl permission and indexing are separate axes/)
 })
 
+async function oneAgentResult(userAgent) {
+  const tree = await makeTree({
+    'robots.txt': 'User-agent: *\nAllow: /\n',
+    'checks.json': JSON.stringify({
+      schemaVersion: '1',
+      checks: [{ userAgent, url: 'https://example.com/' }],
+    }),
+    'capture.json': JSON.stringify({
+      schemaVersion: '1',
+      responses: [{ url: 'https://example.com/', headers: {} }],
+    }),
+    'audit.config.json': JSON.stringify({
+      schemaVersion: '1',
+      site: { origin: 'https://example.com' },
+      robotsTxt: 'robots.txt',
+      checks: 'checks.json',
+      capture: 'capture.json',
+    }),
+  })
+  try {
+    return await cli(['--config', join(tree.root, 'audit.config.json')])
+  } finally {
+    await tree.dispose()
+  }
+}
+
+function assertOneAgentReport(result) {
+  assert.equal(result.code, 0)
+  const report = JSON.parse(result.stdout)
+  assert.equal(report.status, 'pass')
+  assert.equal(report.summary.checked, 1)
+  assert.deepEqual(report.findings.map((finding) => finding.ruleId), ['crawl-decision'])
+  assert.match(result.stdout, /ExampleBot/)
+  assert.match(result.stderr, /crawl-decision/)
+}
+
+test('an ordinary user agent still yields one visible, passing CLI decision', async () => {
+  const result = await oneAgentResult('ExampleBot')
+  assertOneAgentReport(result)
+  assert.match(result.stderr, /ExampleBot/)
+})
+
+test('C1 controls in a user agent cannot reach JSON stdout or human stderr', async () => {
+  for (const code of [0x0080, 0x0085, 0x009b, 0x009f]) {
+    const character = String.fromCharCode(code)
+    const result = await oneAgentResult(`ExampleBot${character}`)
+    assertOneAgentReport(result)
+    assert.equal(result.stdout.includes(character), false, `U+${code.toString(16)} reached JSON stdout`)
+    assert.equal(result.stderr.includes(character), false, `U+${code.toString(16)} reached human stderr`)
+  }
+})
+
+test('bidi controls in a user agent cannot reach JSON stdout or human stderr', async () => {
+  for (const code of [0x200e, 0x200f, 0x202a, 0x202e, 0x2066, 0x2069]) {
+    const character = String.fromCharCode(code)
+    const result = await oneAgentResult(`ExampleBot${character}`)
+    assertOneAgentReport(result)
+    assert.equal(result.stdout.includes(character), false, `U+${code.toString(16)} reached JSON stdout`)
+    assert.equal(result.stderr.includes(character), false, `U+${code.toString(16)} reached human stderr`)
+  }
+})
+
 test('--json suppresses the human summary and leaves stdout byte-identical', async () => {
   const plain = await cli(['--config', CLEAN])
   const json = await cli(['--config', CLEAN, '--json'])
