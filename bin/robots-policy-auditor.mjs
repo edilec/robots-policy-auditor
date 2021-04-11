@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { ConfigError, DEFAULT_LIMITS, LIMIT_NAMES, auditRobotsPolicy, exitCodeFor, formatReport } from '../src/index.mjs'
+import { ConfigError, DEFAULT_LIMITS, LIMIT_NAMES, auditRobotsPolicy, exitCodeFor, formatReport, safeDisplayText } from '../src/index.mjs'
 
 const HELP = `robots-policy-auditor
 
@@ -82,7 +82,7 @@ async function main(argv) {
   try {
     options = parseArguments(argv)
   } catch (error) {
-    process.stderr.write(`${error.message}\n\n${HELP}`)
+    process.stderr.write(`${safeDisplayText(error.message)}\n\n${HELP}`)
     return 2
   }
   if (options.help) {

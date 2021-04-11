@@ -85,6 +85,94 @@ async function oneAgentResult(userAgent) {
   }
 }
 
+async function oneDirectiveResult(directive) {
+  const tree = await makeTree({
+    'robots.txt': `User-agent: *\nAllow: /\n${directive}: value\n`,
+    'checks.json': JSON.stringify({
+      schemaVersion: '1',
+      checks: [{ userAgent: 'ExampleBot', url: 'https://example.com/' }],
+    }),
+    'capture.json': JSON.stringify({
+      schemaVersion: '1',
+      responses: [{ url: 'https://example.com/', headers: {} }],
+    }),
+    'audit.config.json': JSON.stringify({
+      schemaVersion: '1',
+      site: { origin: 'https://example.com' },
+      robotsTxt: 'robots.txt',
+      checks: 'checks.json',
+      capture: 'capture.json',
+    }),
+  })
+  try {
+    return await cli(['--config', join(tree.root, 'audit.config.json')])
+  } finally {
+    await tree.dispose()
+  }
+}
+
+function assertUnknownDirectiveReport(result) {
+  assert.equal(result.code, 0)
+  const report = JSON.parse(result.stdout)
+  assert.equal(report.status, 'pass')
+  assert.equal(report.summary.checked, 1)
+  assert.deepEqual(report.findings.map((finding) => finding.ruleId), ['crawl-decision', 'unknown-directive'])
+  assert.match(result.stdout, /unrecognised directive/)
+  assert.match(result.stderr, /unknown-directive/)
+}
+
+test('an ordinary unknown robots directive remains a visible warning', async () => {
+  const result = await oneDirectiveResult('X-Thing')
+  assertUnknownDirectiveReport(result)
+  assert.match(result.stdout, /X-Thing/)
+  assert.match(result.stderr, /x-thing/)
+})
+
+test('C1 and bidi characters in unknown robots directives cannot reach either CLI stream', async () => {
+  for (const code of [0x0085, 0x202e]) {
+    const character = String.fromCharCode(code)
+    const result = await oneDirectiveResult(`X${character}-Thing`)
+    assertUnknownDirectiveReport(result)
+    assert.equal(result.stdout.includes(character), false, `U+${code.toString(16)} reached JSON stdout`)
+    assert.equal(result.stderr.includes(character), false, `U+${code.toString(16)} reached human stderr`)
+  }
+})
+
+test('C1 and bidi characters in config keys cannot reach the CLI diagnostic', async () => {
+  for (const code of [0x0085, 0x202e]) {
+    const character = String.fromCharCode(code)
+    const tree = await makeTree({
+      'audit.config.json': JSON.stringify({
+        schemaVersion: '1',
+        site: { origin: 'https://example.com' },
+        robotsTxt: 'robots.txt',
+        checks: 'checks.json',
+        [`surprise${character}`]: true,
+      }),
+    })
+    try {
+      const result = await cli(['--config', join(tree.root, 'audit.config.json')])
+      assert.equal(result.code, 2)
+      assert.equal(result.stdout, '')
+      assert.match(result.stderr, /unknown key/)
+      assert.equal(result.stderr.includes(character), false, `U+${code.toString(16)} reached config stderr`)
+    } finally {
+      await tree.dispose()
+    }
+  }
+})
+
+test('C1 and bidi characters in unknown CLI options cannot reach the usage diagnostic', async () => {
+  for (const code of [0x0085, 0x202e]) {
+    const character = String.fromCharCode(code)
+    const result = await cli([`--surprise${character}`])
+    assert.equal(result.code, 2)
+    assert.equal(result.stdout, '')
+    assert.match(result.stderr, /unknown option/)
+    assert.equal(result.stderr.includes(character), false, `U+${code.toString(16)} reached option stderr`)
+  }
+})
+
 function assertOneAgentReport(result) {
   assert.equal(result.code, 0)
   const report = JSON.parse(result.stdout)

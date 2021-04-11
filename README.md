@@ -111,6 +111,8 @@ turn a real failure into a green run.
 Every decision names the rule that won, its line in `robots.txt`, its octet length and the group it
 came from. Exit codes: `0` decided and passing, `1` decided and failing, `2` invalid configuration,
 unreadable input, unverified evidence, or a limit exceeded.
+Control and bidirectional-formatting characters from input are replaced before any finding or
+diagnostic reaches JSON stdout or human stderr; an ordinary unknown directive is still reported.
 
 ## Matching
 

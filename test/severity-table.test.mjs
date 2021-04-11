@@ -69,6 +69,27 @@ test('severity cannot be passed in at a construction site', () => {
   assert.equal(finding.severity, 'warning')
 })
 
+test('finding text keeps visible content but replaces controls in every output field', () => {
+  const ordinary = makeFinding('unknown-directive', 'X-Thing', {
+    file: 'robots.txt', pointer: '/line/1',
+  }, { suggestion: 'check X-Thing' })
+  assert.deepEqual(
+    [ordinary.message, ordinary.location.file, ordinary.location.pointer, ordinary.suggestion],
+    ['X-Thing', 'robots.txt', '/line/1', 'check X-Thing'],
+  )
+
+  for (const code of [0x0085, 0x202e]) {
+    const character = String.fromCharCode(code)
+    const finding = makeFinding('unknown-directive', `X${character}-Thing`, {
+      file: `robots${character}.txt`, pointer: `/line/${character}1`,
+    }, { suggestion: `check X${character}-Thing` })
+    for (const output of [finding.message, finding.location.file, finding.location.pointer, finding.suggestion]) {
+      assert.equal(output.includes(character), false, `U+${code.toString(16)} survived in a finding field`)
+      assert.match(output, /[A-Za-z1]/)
+    }
+  }
+})
+
 test('the rules that decide a refusal or a real defect are errors, not warnings', () => {
   // Downgrading any of these turns a run that must fail into a green build.
   assert.equal(RULE_SEVERITY['noindex-behind-disallow'], 'error')

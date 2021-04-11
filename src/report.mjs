@@ -67,6 +67,15 @@ function isUnprintable(code) {
     (code >= 0x2066 && code <= 0x2069)
 }
 
+/** Remove report-structure and direction controls without truncating diagnostics. */
+export function safeDisplayText(text) {
+  let cleaned = ''
+  for (const character of String(text)) {
+    cleaned += isUnprintable(character.codePointAt(0)) ? ' ' : character
+  }
+  return cleaned
+}
+
 /**
  * Order by UTF-16 code unit.
  *
@@ -98,11 +107,7 @@ export function severityOf(ruleId) {
  * the span V8 quotes at the front of its own message. See `parseFailureDetail`.
  */
 export function excerpt(text) {
-  let cleaned = ''
-  for (const character of String(text)) {
-    cleaned += isUnprintable(character.codePointAt(0)) ? ' ' : character
-  }
-  const flattened = cleaned.replace(/\s+/g, ' ').trim()
+  const flattened = safeDisplayText(text).replace(/\s+/g, ' ').trim()
   if (flattened.length <= EVIDENCE_LIMIT) return flattened
   return `${flattened.slice(0, EVIDENCE_LIMIT)}...`
 }
@@ -170,11 +175,11 @@ function describeParseFailure(message) {
  * at a call site; it is looked up from the single table above.
  */
 export function makeFinding(ruleId, message, location = {}, extra = {}) {
-  const finding = { ruleId, severity: severityOf(ruleId), message, location: {} }
-  if (location.file !== undefined && location.file !== null) finding.location.file = location.file
-  if (location.pointer !== undefined && location.pointer !== null) finding.location.pointer = location.pointer
+  const finding = { ruleId, severity: severityOf(ruleId), message: safeDisplayText(message), location: {} }
+  if (location.file !== undefined && location.file !== null) finding.location.file = safeDisplayText(location.file)
+  if (location.pointer !== undefined && location.pointer !== null) finding.location.pointer = safeDisplayText(location.pointer)
   if (extra.evidence !== undefined && extra.evidence !== null) finding.evidence = excerpt(extra.evidence)
-  if (extra.suggestion !== undefined && extra.suggestion !== null) finding.suggestion = extra.suggestion
+  if (extra.suggestion !== undefined && extra.suggestion !== null) finding.suggestion = safeDisplayText(extra.suggestion)
   return finding
 }
 

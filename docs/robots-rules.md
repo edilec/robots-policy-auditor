@@ -193,9 +193,9 @@ began and stopped.
 | `maxMetaTags` | 500 | Meta elements extracted from one captured document. |
 | `maxHeaderValues` | 50 | `X-Robots-Tag` values read from one response. |
 
-Evidence excerpts are bounded at 200 characters and stripped of control characters. Input content
-is data: it is never emitted at full length and never placed where it could be mistaken for an
-instruction.
+Evidence excerpts are bounded at 200 characters. Findings and diagnostics also replace control
+and bidirectional-formatting characters from input before either output stream is written. Input
+content is treated as evidence, never as an instruction.
 
 A parse failure is the one place where bounding was not enough, and it is handled separately.
 V8 quotes the input back inside its own message — `Unexpected token 'A', "AKIAIOSFODNN7EXAMPLE"

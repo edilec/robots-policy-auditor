@@ -19,7 +19,7 @@ import {
   extractMetaRobots,
   parseXRobotsTag,
 } from './directives.mjs'
-import { CONFIG_SCHEMA_VERSION, buildReport, excerpt, makeFinding, parseFailureDetail } from './report.mjs'
+import { CONFIG_SCHEMA_VERSION, buildReport, excerpt, makeFinding, parseFailureDetail, safeDisplayText } from './report.mjs'
 import { decideCrawl, parseRobotsTxt } from './robots-txt.mjs'
 
 export {
@@ -44,6 +44,7 @@ export {
   formatReport,
   makeFinding,
   parseFailureDetail,
+  safeDisplayText,
   severityOf,
   sortFindings,
 } from './report.mjs'
@@ -101,7 +102,7 @@ const RESPONSE_KEYS = new Set(['url', 'status', 'headers', 'html', 'note'])
  */
 export class ConfigError extends Error {
   constructor(message, rule = null) {
-    super(message)
+    super(safeDisplayText(message))
     this.name = 'ConfigError'
     this.rule = rule
   }
