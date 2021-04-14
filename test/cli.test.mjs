@@ -189,6 +189,20 @@ test('an ordinary user agent still yields one visible, passing CLI decision', as
   assert.match(result.stderr, /ExampleBot/)
 })
 
+test('an invisible-only user agent is unevaluable before any crawl decision', async () => {
+  for (const code of [0x0085, 0x200e, 0x034f]) {
+    const character = String.fromCharCode(code)
+    const result = await oneAgentResult(character)
+    assert.equal(result.code, 2, `U+${code.toString(16)} must not decide crawling`)
+    const report = JSON.parse(result.stdout)
+    assert.equal(report.status, 'incomplete')
+    assert.equal(report.summary.checked, 0)
+    assert.deepEqual(report.findings.map((finding) => finding.ruleId), ['no-evidence', 'check-unevaluable'])
+    assert.equal(result.stdout.includes(character), false)
+    assert.equal(result.stderr.includes(character), false)
+  }
+})
+
 test('C1 controls in a user agent cannot reach JSON stdout or human stderr', async () => {
   for (const code of [0x0080, 0x0085, 0x009b, 0x009f]) {
     const character = String.fromCharCode(code)
@@ -207,6 +221,14 @@ test('bidi controls in a user agent cannot reach JSON stdout or human stderr', a
     assert.equal(result.stdout.includes(character), false, `U+${code.toString(16)} reached JSON stdout`)
     assert.equal(result.stderr.includes(character), false, `U+${code.toString(16)} reached human stderr`)
   }
+})
+
+test('a visible agent with a default-ignorable suffix remains decidable without leaking it', async () => {
+  const character = String.fromCharCode(0x034f)
+  const result = await oneAgentResult(`ExampleBot${character}`)
+  assertOneAgentReport(result)
+  assert.equal(result.stdout.includes(character), false)
+  assert.equal(result.stderr.includes(character), false)
 })
 
 test('--json suppresses the human summary and leaves stdout byte-identical', async () => {

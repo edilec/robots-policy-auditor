@@ -769,6 +769,18 @@ export async function auditRobotsPolicy({ configFile, limits: limitOverrides = {
 
   for (const check of checks) {
     const pointer = `/checks/${check.index}`
+    if (safeDisplayText(check.userAgent).trim() === '') {
+      incomplete = true
+      findings.push(
+        makeFinding(
+          'check-unevaluable',
+          `checks[${check.index}] has no visible user-agent name, so no crawl or indexing rule can be applied to it.`,
+          { file: checksFile, pointer },
+          { suggestion: 'supply a visible user-agent product token' },
+        ),
+      )
+      continue
+    }
     let url
     try {
       url = new URL(check.url)

@@ -67,11 +67,13 @@ function isUnprintable(code) {
     (code >= 0x2066 && code <= 0x2069)
 }
 
+const DEFAULT_IGNORABLE = /\p{Default_Ignorable_Code_Point}/u
+
 /** Remove report-structure and direction controls without truncating diagnostics. */
 export function safeDisplayText(text) {
   let cleaned = ''
   for (const character of String(text)) {
-    cleaned += isUnprintable(character.codePointAt(0)) ? ' ' : character
+    cleaned += isUnprintable(character.codePointAt(0)) || DEFAULT_IGNORABLE.test(character) ? ' ' : character
   }
   return cleaned
 }

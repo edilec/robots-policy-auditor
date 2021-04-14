@@ -113,6 +113,8 @@ came from. Exit codes: `0` decided and passing, `1` decided and failing, `2` inv
 unreadable input, unverified evidence, or a limit exceeded.
 Control and bidirectional-formatting characters from input are replaced before any finding or
 diagnostic reaches JSON stdout or human stderr; an ordinary unknown directive is still reported.
+An agent name consisting only of invisible characters is unevaluable: no crawl decision is made,
+and the report is incomplete. Default-ignorable characters are rendered as spaces in diagnostics.
 
 ## Matching
 
