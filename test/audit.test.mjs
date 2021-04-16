@@ -70,13 +70,13 @@ test('every expectation in the clean example is met by the decision it names', a
   assert.deepEqual(
     findingsOf(report, 'crawl-decision').map((finding) => finding.message),
     [
-      'crawl=allow index=indexable for "ExampleBot" at /.',
-      'crawl=disallow index=indexable for "ExampleBot" at /internal/notes.',
-      'crawl=disallow index=indexable for "GPTBot" at /search?q=shoes.',
-      'crawl=allow index=indexable for "GPTBot" at /search/help.',
-      'crawl=allow index=blocked for "ExampleBot" at /drafts/2026-plan.',
-      'crawl=allow index=indexable for "ExampleBot" at /data/export.json.',
-      'crawl=disallow index=indexable for "OtherBot" at /data/export.json.',
+      'crawl=allow index=indexable for "ExampleBot" at /checks/0.',
+      'crawl=disallow index=indexable for "ExampleBot" at /checks/1.',
+      'crawl=disallow index=indexable for "GPTBot" at /checks/2.',
+      'crawl=allow index=indexable for "GPTBot" at /checks/3.',
+      'crawl=allow index=blocked for "ExampleBot" at /checks/4.',
+      'crawl=allow index=indexable for "ExampleBot" at /checks/5.',
+      'crawl=disallow index=indexable for "OtherBot" at /checks/6.',
     ],
   )
   assert.equal(findingsOf(report, 'crawl-expectation-mismatch').length, 0)
@@ -227,7 +227,7 @@ test('a disallowed URL with no directive is reported as still indexable, not as 
   try {
     const report = await auditRobotsPolicy({ configFile: join(tree.root, 'audit.config.json') })
     const decision = findingsOf(report, 'crawl-decision')[0]
-    assert.equal(decision.message, 'crawl=disallow index=indexable for "GPTBot" at /private/report.')
+    assert.equal(decision.message, 'crawl=disallow index=indexable for "GPTBot" at /checks/0.')
 
     const honest = findingsOf(report, 'disallow-is-not-deindex')
     assert.equal(honest.length, 1)
@@ -281,8 +281,8 @@ test('an indexing directive scoped to another agent does not decide this agent',
     assert.deepEqual(
       findingsOf(report, 'crawl-decision').map((finding) => finding.message),
       [
-        'crawl=allow index=blocked for "GoogleBot" at /page.',
-        'crawl=allow index=indexable for "GPTBot" at /page.',
+        'crawl=allow index=blocked for "GoogleBot" at /checks/0.',
+        'crawl=allow index=indexable for "GPTBot" at /checks/1.',
       ],
     )
   } finally {

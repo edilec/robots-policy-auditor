@@ -894,7 +894,7 @@ export async function auditRobotsPolicy({ configFile, limits: limitOverrides = {
     findings.push(
       makeFinding(
         'crawl-decision',
-        `crawl=${crawl.permission} index=${indexLabel} for "${excerpt(check.userAgent).slice(0, 40)}" at ${excerpt(url.pathname + url.search).slice(0, 80)}.`,
+        `crawl=${crawl.permission} index=${indexLabel} for "${excerpt(check.userAgent).slice(0, 40)}" at ${pointer}.`,
         { file: checksFile, pointer },
         {
           evidence:

@@ -85,6 +85,42 @@ async function oneAgentResult(userAgent) {
   }
 }
 
+async function oneUrlResult({ url, responses = [{ url, headers: {} }], origin = 'https://example.test' }) {
+  const tree = await makeTree({
+    'robots.txt': 'User-agent: *\nAllow: /\n',
+    'checks.json': JSON.stringify({ schemaVersion: '1', checks: [{ userAgent: 'ExampleBot', url }] }),
+    'capture.json': JSON.stringify({ schemaVersion: '1', responses }),
+    'audit.config.json': JSON.stringify({
+      schemaVersion: '1', site: { origin }, robotsTxt: 'robots.txt', checks: 'checks.json', capture: 'capture.json',
+    }),
+  })
+  try {
+    return await cli(['--config', join(tree.root, 'audit.config.json')])
+  } finally {
+    await tree.dispose()
+  }
+}
+
+test('a matched URL query affects the decision but stays out of JSON and human crawl-decision text', async () => {
+  const ordinary = await oneUrlResult({ url: 'https://example.test/path?item=ordinary' })
+  assert.equal(ordinary.code, 0)
+  assert.equal(JSON.parse(ordinary.stdout).status, 'pass')
+
+  const secret = 'SYNTHETIC_SECRET_CANARY'
+  const result = await oneUrlResult({ url: `https://example.test/path?token=${secret}` })
+  const report = JSON.parse(result.stdout)
+  assert.equal(result.code, 0)
+  assert.equal(report.status, 'pass')
+  assert.equal(report.summary.checked, 1)
+  assert.deepEqual(report.findings.map((finding) => finding.ruleId), ['crawl-decision'])
+  assert.equal(report.findings[0].location.pointer, '/checks/0')
+  assert.equal(report.findings[0].message, 'crawl=allow index=indexable for "ExampleBot" at /checks/0.')
+  assert.match(report.findings[0].evidence, /Allow: \/ \(line 2, 1 octet\)/u)
+  assert.equal(result.stdout.includes(secret), false)
+  assert.equal(result.stderr.includes(secret), false)
+  assert.match(result.stderr, /crawl-decision/u)
+})
+
 async function oneDirectiveResult(directive) {
   const tree = await makeTree({
     'robots.txt': `User-agent: *\nAllow: /\n${directive}: value\n`,

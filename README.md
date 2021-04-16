@@ -100,7 +100,7 @@ turn a real failure into a green run.
     {
       "ruleId": "crawl-decision",
       "severity": "info",
-      "message": "crawl=disallow index=indexable for \"GPTBot\" at /search?q=shoes.",
+      "message": "crawl=disallow index=indexable for \"GPTBot\" at /checks/2.",
       "location": { "file": "checks.json", "pointer": "/checks/2" },
       "evidence": "crawl: Disallow: /search (line 5, 7 octets) in the global \"*\" group [*]; index: none"
     }
