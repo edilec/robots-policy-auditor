@@ -836,10 +836,10 @@ export async function auditRobotsPolicy({ configFile, limits: limitOverrides = {
         makeFinding(
           'indexing-unverified',
           unreadEvidence
-            ? `The captured response for ${excerpt(captureKey(url)).slice(0, 80)} was not fully read (${entry.unread.join('; ')}), so the indexing directives for "${excerpt(check.userAgent).slice(0, 40)}" are unknown. Evidence nobody read cannot show a URL is indexable.`
+            ? `The captured response for the URL at ${pointer} was not fully read (${entry.unread.join('; ')}), so the indexing directives for "${excerpt(check.userAgent).slice(0, 40)}" are unknown. Evidence nobody read cannot show a URL is indexable.`
             : found === null
-              ? `No captured response covers ${excerpt(captureKey(url)).slice(0, 80)}, so the indexing directives for "${excerpt(check.userAgent).slice(0, 40)}" are unknown. Crawl permission below is decided; indexing is not.`
-              : `The captured response for ${excerpt(captureKey(url)).slice(0, 80)} declares neither headers nor a document, so it states nothing about indexing for "${excerpt(check.userAgent).slice(0, 40)}". Silence is not evidence that no directive was served.`,
+              ? `No captured response covers the URL at ${pointer}, so the indexing directives for "${excerpt(check.userAgent).slice(0, 40)}" are unknown. Crawl permission below is decided; indexing is not.`
+              : `The captured response for the URL at ${pointer} declares neither headers nor a document, so it states nothing about indexing for "${excerpt(check.userAgent).slice(0, 40)}". Silence is not evidence that no directive was served.`,
           { file: checksFile, pointer },
           {
             suggestion: unreadEvidence

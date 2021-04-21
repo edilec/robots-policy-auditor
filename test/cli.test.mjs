@@ -121,6 +121,34 @@ test('a matched URL query affects the decision but stays out of JSON and human c
   assert.match(result.stderr, /crawl-decision/u)
 })
 
+test('missing, empty and unread captures keep checked URL queries out of indexing-unverified reports', async () => {
+  const secret = 'SYNTHETIC_SECRET_CANARY'
+  const url = `https://example.test/path?token=${secret}`
+  const complete = await oneUrlResult({ url })
+  assert.equal(complete.code, 0)
+  assert.equal(JSON.parse(complete.stdout).status, 'pass')
+
+  for (const [responses, reason] of [
+    [[], /No captured response covers/u],
+    [[{ url }], /declares neither headers nor a document/u],
+    [[{ url, html: 'missing.html' }], /was not fully read/u],
+  ]) {
+    const result = await oneUrlResult({ url, responses })
+    const report = JSON.parse(result.stdout)
+    assert.equal(result.code, 2)
+    assert.equal(report.status, 'incomplete')
+    assert.equal(report.summary.checked, 1)
+    assert.equal(report.summary.indexUnverified, 1)
+    const unverified = report.findings.filter((finding) => finding.ruleId === 'indexing-unverified')
+    assert.equal(unverified.length, 1)
+    assert.equal(unverified[0].location.pointer, '/checks/0')
+    assert.match(unverified[0].message, reason)
+    assert.match(unverified[0].message, /\/checks\/0/u)
+    assert.equal(result.stdout.includes(secret), false)
+    assert.equal(result.stderr.includes(secret), false)
+  }
+})
+
 async function oneDirectiveResult(directive) {
   const tree = await makeTree({
     'robots.txt': `User-agent: *\nAllow: /\n${directive}: value\n`,
