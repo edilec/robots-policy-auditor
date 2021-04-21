@@ -149,6 +149,26 @@ test('missing, empty and unread captures keep checked URL queries out of indexin
   }
 })
 
+test('a malformed checked URL stays unevaluable without copying its value into either CLI stream', async () => {
+  const ordinary = await oneUrlResult({ url: 'not-a-url', responses: [] })
+  assert.equal(ordinary.code, 2)
+  assert.equal(JSON.parse(ordinary.stdout).status, 'incomplete')
+
+  const secret = 'SYNTHETIC_SECRET_CANARY'
+  const result = await oneUrlResult({ url: `not-a-url?token=${secret}`, responses: [] })
+  const report = JSON.parse(result.stdout)
+  assert.equal(result.code, 2)
+  assert.equal(report.status, 'incomplete')
+  assert.equal(report.summary.checked, 0)
+  assert.deepEqual(report.findings.map((finding) => finding.ruleId), ['no-evidence', 'check-unevaluable'])
+  const unevaluable = report.findings.find((finding) => finding.ruleId === 'check-unevaluable')
+  assert.equal(unevaluable.location.pointer, '/checks/0')
+  assert.match(unevaluable.message, /does not declare an absolute URL/u)
+  assert.equal(unevaluable.evidence, undefined)
+  assert.equal(result.stdout.includes(secret), false)
+  assert.equal(result.stderr.includes(secret), false)
+})
+
 async function oneDirectiveResult(directive) {
   const tree = await makeTree({
     'robots.txt': `User-agent: *\nAllow: /\n${directive}: value\n`,

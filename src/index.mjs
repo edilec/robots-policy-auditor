@@ -791,7 +791,7 @@ export async function auditRobotsPolicy({ configFile, limits: limitOverrides = {
           'check-unevaluable',
           `checks[${check.index}] does not declare an absolute URL, so no rule could be applied to it.`,
           { file: checksFile, pointer },
-          { evidence: check.url, suggestion: 'use an absolute URL such as https://example.com/path' },
+          { suggestion: 'use an absolute URL such as https://example.com/path' },
         ),
       )
       continue
