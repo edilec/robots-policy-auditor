@@ -169,6 +169,28 @@ test('a malformed checked URL stays unevaluable without copying its value into e
   assert.equal(result.stderr.includes(secret), false)
 })
 
+test('a different-origin check is incomplete without exposing its origin or URL query', async () => {
+  const sameOrigin = await oneUrlResult({ url: 'https://example.test/path?item=ordinary' })
+  assert.equal(sameOrigin.code, 0)
+  assert.equal(JSON.parse(sameOrigin.stdout).status, 'pass')
+
+  const secret = 'SYNTHETIC_SECRET_CANARY'
+  const result = await oneUrlResult({ url: `https://other.test/path?token=${secret}`, responses: [] })
+  const report = JSON.parse(result.stdout)
+  assert.equal(result.code, 2)
+  assert.equal(report.status, 'incomplete')
+  assert.equal(report.summary.checked, 0)
+  assert.deepEqual(report.findings.map((finding) => finding.ruleId), ['no-evidence', 'check-unevaluable'])
+  const unevaluable = report.findings.find((finding) => finding.ruleId === 'check-unevaluable')
+  assert.equal(unevaluable.location.pointer, '/checks/0')
+  assert.match(unevaluable.message, /origin different from the configured site/u)
+  assert.equal(unevaluable.evidence, undefined)
+  assert.equal(result.stdout.includes('other.test'), false)
+  assert.equal(result.stderr.includes('other.test'), false)
+  assert.equal(result.stdout.includes(secret), false)
+  assert.equal(result.stderr.includes(secret), false)
+})
+
 async function oneDirectiveResult(directive) {
   const tree = await makeTree({
     'robots.txt': `User-agent: *\nAllow: /\n${directive}: value\n`,

@@ -801,9 +801,9 @@ export async function auditRobotsPolicy({ configFile, limits: limitOverrides = {
       findings.push(
         makeFinding(
           'check-unevaluable',
-          `checks[${check.index}] names the origin ${excerpt(url.origin).slice(0, 60)}, which this robots.txt does not govern. A robots.txt applies only to its own origin.`,
+          `checks[${check.index}] names an origin different from the configured site, which this robots.txt does not govern. A robots.txt applies only to its own origin.`,
           { file: checksFile, pointer },
-          { evidence: check.url, suggestion: `audit that origin with its own robots.txt, or correct the URL` },
+          { suggestion: `audit the URL's origin with its own robots.txt, or correct the URL` },
         ),
       )
       continue
