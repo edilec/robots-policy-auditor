@@ -212,15 +212,13 @@ function assertOrigin(value, label) {
   try {
     url = new URL(value)
   } catch {
-    throw new ConfigError(`${label} must be an absolute http(s) URL, got "${excerpt(value).slice(0, 80)}".`)
+    throw new ConfigError(`${label} must be an absolute http(s) URL.`)
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new ConfigError(`${label} must use http or https, got "${url.protocol.slice(0, -1)}".`)
+    throw new ConfigError(`${label} must use http or https.`)
   }
   if (url.pathname !== '/' || url.search !== '' || url.hash !== '') {
-    throw new ConfigError(
-      `${label} must be a bare origin such as https://example.com, got "${excerpt(value).slice(0, 80)}".`,
-    )
+    throw new ConfigError(`${label} must be a bare origin such as https://example.com.`)
   }
   return url.origin
 }
@@ -345,7 +343,7 @@ export function validateCapture(document) {
     try {
       url = new URL(entry.url)
     } catch {
-      throw new ConfigError(`${label}.url is not an absolute URL: "${excerpt(entry.url).slice(0, 80)}".`)
+      throw new ConfigError(`${label}.url is not an absolute URL.`)
     }
     if (entry.status !== undefined && (!Number.isInteger(entry.status) || entry.status < 100 || entry.status > 599)) {
       throw new ConfigError(`${label}.status must be an HTTP status code when present.`)

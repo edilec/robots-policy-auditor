@@ -191,6 +191,28 @@ test('a different-origin check is incomplete without exposing its origin or URL 
   assert.equal(result.stderr.includes(secret), false)
 })
 
+test('invalid site and capture URL diagnostics refuse configuration without repeating URL data', async () => {
+  const valid = await oneUrlResult({ url: 'https://example.test/path' })
+  assert.equal(valid.code, 0)
+  assert.equal(JSON.parse(valid.stdout).status, 'pass')
+
+  const secret = 'SYNTHETIC_SECRET_CANARY'
+  const schemeSecret = 'syntheticsecretcanary'
+  for (const [options, expected] of [
+    [{ url: 'https://example.test/path', origin: `not-a-url?token=${secret}` }, /site\.origin must be an absolute http\(s\) URL/u],
+    [{ url: 'https://example.test/path', origin: `https://example.test/path?token=${secret}` }, /site\.origin must be a bare origin/u],
+    [{ url: 'https://example.test/path', origin: `${schemeSecret}:payload` }, /site\.origin must use http or https/u],
+    [{ url: 'https://example.test/path', responses: [{ url: `not-a-url?token=${secret}`, headers: {} }] }, /responses\[0\]\.url is not an absolute URL/u],
+  ]) {
+    const result = await oneUrlResult(options)
+    assert.equal(result.code, 2)
+    assert.equal(result.stdout, '')
+    assert.match(result.stderr, expected)
+    assert.equal(result.stderr.includes(secret), false)
+    assert.equal(result.stderr.includes(schemeSecret), false)
+  }
+})
+
 async function oneDirectiveResult(directive) {
   const tree = await makeTree({
     'robots.txt': `User-agent: *\nAllow: /\n${directive}: value\n`,
