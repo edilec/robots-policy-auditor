@@ -121,6 +121,50 @@ test('a matched URL query affects the decision but stays out of JSON and human c
   assert.match(result.stderr, /crawl-decision/u)
 })
 
+test('query-distinct captured responses remain distinct after URL text is withheld', async () => {
+  const secret = 'SYNTHETIC_SECRET_CANARY'
+  const blockedUrl = `https://example.test/path?token=${secret}`
+  const ordinaryUrl = 'https://example.test/path?item=ordinary'
+  const tree = await makeTree({
+    'robots.txt': 'User-agent: *\nAllow: /\n',
+    'checks.json': JSON.stringify({
+      schemaVersion: '1',
+      checks: [
+        { userAgent: 'ExampleBot', url: blockedUrl },
+        { userAgent: 'ExampleBot', url: ordinaryUrl },
+      ],
+    }),
+    'capture.json': JSON.stringify({
+      schemaVersion: '1',
+      responses: [
+        { url: ordinaryUrl, headers: {} },
+        { url: blockedUrl, headers: { 'x-robots-tag': 'noindex' } },
+      ],
+    }),
+    'audit.config.json': JSON.stringify({
+      schemaVersion: '1', site: { origin: 'https://example.test' },
+      robotsTxt: 'robots.txt', checks: 'checks.json', capture: 'capture.json',
+    }),
+  })
+  try {
+    const result = await cli(['--config', join(tree.root, 'audit.config.json')])
+    assert.equal(result.code, 0)
+    const report = JSON.parse(result.stdout)
+    assert.equal(report.status, 'pass')
+    assert.equal(report.summary.checked, 2)
+    assert.equal(report.summary.indexBlocked, 1)
+    const decisions = report.findings.filter((finding) => finding.ruleId === 'crawl-decision')
+    assert.deepEqual(decisions.map((finding) => [finding.location.pointer, finding.message]), [
+      ['/checks/0', 'crawl=allow index=blocked for "ExampleBot" at /checks/0.'],
+      ['/checks/1', 'crawl=allow index=indexable for "ExampleBot" at /checks/1.'],
+    ])
+    assert.equal(result.stdout.includes(secret), false)
+    assert.equal(result.stderr.includes(secret), false)
+  } finally {
+    await tree.dispose()
+  }
+})
+
 test('missing, empty and unread captures keep checked URL queries out of indexing-unverified reports', async () => {
   const secret = 'SYNTHETIC_SECRET_CANARY'
   const url = `https://example.test/path?token=${secret}`
