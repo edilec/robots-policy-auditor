@@ -217,7 +217,8 @@ function assertOrigin(value, label) {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new ConfigError(`${label} must use http or https.`)
   }
-  if (url.pathname !== '/' || url.search !== '' || url.hash !== '') {
+  if (url.username !== '' || url.password !== '' || (typeof value === 'string' && value.includes('@')) ||
+      url.pathname !== '/' || url.search !== '' || url.hash !== '') {
     throw new ConfigError(`${label} must be a bare origin such as https://example.com.`)
   }
   return url.origin

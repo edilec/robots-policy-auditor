@@ -38,6 +38,7 @@ node bin/robots-policy-auditor.mjs --help
 
 One config file. Its directory is the **input root**, and every path it names must stay inside that
 root — checked lexically and again against the real path after symbolic links are followed.
+`site.origin` must be a bare HTTP(S) origin without userinfo, a path, query, or fragment.
 
 ```json
 {

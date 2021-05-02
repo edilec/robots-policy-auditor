@@ -257,6 +257,25 @@ test('invalid site and capture URL diagnostics refuse configuration without repe
   }
 })
 
+test('site.origin refuses userinfo rather than normalizing it into a bare origin', async () => {
+  const valid = await oneUrlResult({ url: 'https://example.test/path' })
+  assert.equal(valid.code, 0)
+  assert.equal(JSON.parse(valid.stdout).status, 'pass')
+
+  const other = await oneUrlResult({ url: 'https://example.test/path', origin: 'https://other.test' })
+  assert.equal(other.code, 2)
+  assert.equal(JSON.parse(other.stdout).status, 'incomplete')
+  assert.equal(JSON.parse(other.stdout).summary.checked, 0)
+
+  for (const origin of ['https://other.test@example.test', 'https://@example.test']) {
+    const result = await oneUrlResult({ url: 'https://example.test/path', origin })
+    assert.equal(result.code, 2, origin)
+    assert.equal(result.stdout, '', origin)
+    assert.match(result.stderr, /site\.origin must be a bare origin/u)
+    assert.equal(result.stderr.includes('other.test'), false)
+  }
+})
+
 async function oneDirectiveResult(directive) {
   const tree = await makeTree({
     'robots.txt': `User-agent: *\nAllow: /\n${directive}: value\n`,
