@@ -374,10 +374,63 @@ function assertOneAgentReport(result) {
   assert.match(result.stderr, /crawl-decision/)
 }
 
+function assertRenderedChangingAgentIsUnevaluable(result, character) {
+  assert.equal(result.code, 2)
+  const report = JSON.parse(result.stdout)
+  assert.equal(report.status, 'incomplete')
+  assert.equal(report.summary.checked, 0)
+  assert.deepEqual(report.findings.map((finding) => finding.ruleId), ['no-evidence', 'check-unevaluable'])
+  assert.equal(report.findings[1].location.pointer, '/checks/0')
+  assert.match(report.findings[1].message, /changes when rendered/u)
+  assert.equal(result.stdout.includes(character), false)
+  assert.equal(result.stderr.includes(character), false)
+}
+
 test('an ordinary user agent still yields one visible, passing CLI decision', async () => {
   const result = await oneAgentResult('ExampleBot')
   assertOneAgentReport(result)
   assert.match(result.stderr, /ExampleBot/)
+})
+
+test('a rendered-changing user agent is unevaluable before a robots group can be selected', async () => {
+  const url = 'https://example.com/'
+  const tree = await makeTree({
+    'robots.txt': 'User-agent: Example\nAllow: /\nUser-agent: ExampleBot\nDisallow: /\n',
+    'checks.json': JSON.stringify({ schemaVersion: '1', checks: [{ userAgent: 'ExampleBot', url }] }),
+    'capture.json': JSON.stringify({ schemaVersion: '1', responses: [{ url, headers: {} }] }),
+    'audit.config.json': JSON.stringify({
+      schemaVersion: '1', site: { origin: 'https://example.com' },
+      robotsTxt: 'robots.txt', checks: 'checks.json', capture: 'capture.json',
+    }),
+  })
+  const audit = async (userAgent) => {
+    await writeFile(join(tree.root, 'checks.json'), JSON.stringify({ schemaVersion: '1', checks: [{ userAgent, url }] }))
+    return cli(['--config', join(tree.root, 'audit.config.json')])
+  }
+  try {
+    const exact = await audit('ExampleBot')
+    assert.equal(exact.code, 0)
+    assert.equal(JSON.parse(exact.stdout).summary.disallowed, 1)
+    assert.match(JSON.parse(exact.stdout).findings.find((finding) => finding.ruleId === 'crawl-decision').message, /crawl=disallow/u)
+
+    const visiblyDifferent = await audit('Example')
+    assert.equal(visiblyDifferent.code, 0)
+    assert.equal(JSON.parse(visiblyDifferent.stdout).summary.allowed, 1)
+    assert.match(JSON.parse(visiblyDifferent.stdout).findings.find((finding) => finding.ruleId === 'crawl-decision').message, /crawl=allow/u)
+
+    const mark = String.fromCharCode(0x200e)
+    const hidden = await audit(`Example${mark}Bot`)
+    assert.equal(hidden.code, 2)
+    const report = JSON.parse(hidden.stdout)
+    assert.equal(report.status, 'incomplete')
+    assert.equal(report.summary.checked, 0)
+    assert.deepEqual(report.findings.map((finding) => finding.ruleId), ['no-evidence', 'check-unevaluable'])
+    assert.equal(hidden.stdout.includes(mark), false)
+    assert.equal(hidden.stderr.includes(mark), false)
+    assert.equal(hidden.stdout.includes('crawl=allow'), false)
+  } finally {
+    await tree.dispose()
+  }
 })
 
 test('an invisible-only user agent is unevaluable before any crawl decision', async () => {
@@ -394,32 +447,26 @@ test('an invisible-only user agent is unevaluable before any crawl decision', as
   }
 })
 
-test('C1 controls in a user agent cannot reach JSON stdout or human stderr', async () => {
+test('C1 controls in a visible user agent make the check incomplete without leaking', async () => {
   for (const code of [0x0080, 0x0085, 0x009b, 0x009f]) {
     const character = String.fromCharCode(code)
     const result = await oneAgentResult(`ExampleBot${character}`)
-    assertOneAgentReport(result)
-    assert.equal(result.stdout.includes(character), false, `U+${code.toString(16)} reached JSON stdout`)
-    assert.equal(result.stderr.includes(character), false, `U+${code.toString(16)} reached human stderr`)
+    assertRenderedChangingAgentIsUnevaluable(result, character)
   }
 })
 
-test('bidi controls in a user agent cannot reach JSON stdout or human stderr', async () => {
+test('bidi controls in a visible user agent make the check incomplete without leaking', async () => {
   for (const code of [0x200e, 0x200f, 0x202a, 0x202e, 0x2066, 0x2069]) {
     const character = String.fromCharCode(code)
     const result = await oneAgentResult(`ExampleBot${character}`)
-    assertOneAgentReport(result)
-    assert.equal(result.stdout.includes(character), false, `U+${code.toString(16)} reached JSON stdout`)
-    assert.equal(result.stderr.includes(character), false, `U+${code.toString(16)} reached human stderr`)
+    assertRenderedChangingAgentIsUnevaluable(result, character)
   }
 })
 
-test('a visible agent with a default-ignorable suffix remains decidable without leaking it', async () => {
+test('a visible agent with a default-ignorable suffix is incomplete without leaking it', async () => {
   const character = String.fromCharCode(0x034f)
   const result = await oneAgentResult(`ExampleBot${character}`)
-  assertOneAgentReport(result)
-  assert.equal(result.stdout.includes(character), false)
-  assert.equal(result.stderr.includes(character), false)
+  assertRenderedChangingAgentIsUnevaluable(result, character)
 })
 
 test('--json suppresses the human summary and leaves stdout byte-identical', async () => {

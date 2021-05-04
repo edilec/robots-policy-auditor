@@ -115,7 +115,9 @@ unreadable input, unverified evidence, or a limit exceeded.
 Control and bidirectional-formatting characters from input are replaced before any finding or
 diagnostic reaches JSON stdout or human stderr; an ordinary unknown directive is still reported.
 An agent name consisting only of invisible characters is unevaluable: no crawl decision is made,
-and the report is incomplete. Default-ignorable characters are rendered as spaces in diagnostics.
+and the report is incomplete. A visible name that would change when rendered — including one
+containing a control, bidi, or default-ignorable character — is also unevaluable rather than
+matched under a different product token. No such character is copied into diagnostics.
 
 ## Matching
 

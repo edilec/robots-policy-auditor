@@ -127,7 +127,7 @@ captured document.
 
 | Rule | Severity | What it means |
 | --- | --- | --- |
-| `check-unevaluable` | error | A check has no visible user-agent name, names no absolute URL, or names an origin this robots.txt does not govern. It could not be decided, so the run is incomplete. |
+| `check-unevaluable` | error | A check has no visible user-agent name, has a name that changes when rendered, names no absolute URL, or names an origin this robots.txt does not govern. It could not be decided, so the run is incomplete. |
 | `crawl-decision` | info | The decision for one agent/URL pair, with the rule that won, its line, its octet length and the group it came from. |
 | `crawl-expectation-mismatch` | error | A check declared `expect.crawl` and the rules decided the other way. |
 | `directive-conflict` | warning | A blocking and a permitting indexing directive both address this agent. The restrictive one is assumed to win. |

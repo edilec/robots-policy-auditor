@@ -768,7 +768,8 @@ export async function auditRobotsPolicy({ configFile, limits: limitOverrides = {
 
   for (const check of checks) {
     const pointer = `/checks/${check.index}`
-    if (safeDisplayText(check.userAgent).trim() === '') {
+    const displayedAgent = safeDisplayText(check.userAgent)
+    if (displayedAgent.trim() === '') {
       incomplete = true
       findings.push(
         makeFinding(
@@ -776,6 +777,18 @@ export async function auditRobotsPolicy({ configFile, limits: limitOverrides = {
           `checks[${check.index}] has no visible user-agent name, so no crawl or indexing rule can be applied to it.`,
           { file: checksFile, pointer },
           { suggestion: 'supply a visible user-agent product token' },
+        ),
+      )
+      continue
+    }
+    if (displayedAgent !== check.userAgent) {
+      incomplete = true
+      findings.push(
+        makeFinding(
+          'check-unevaluable',
+          `checks[${check.index}] has a user-agent name that changes when rendered, so no crawl or indexing rule was applied.`,
+          { file: checksFile, pointer },
+          { suggestion: 'supply a user-agent product token whose spelling remains visible in reports' },
         ),
       )
       continue
