@@ -1,0 +1,52 @@
+{
+  "name": "robots-policy-auditor",
+  "version": "0.1.0",
+  "description": "Evaluate a local robots.txt, captured X-Robots-Tag headers and captured HTML robots directives for an agent/URL list, reporting which rule won and keeping crawl permission separate from indexing.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "lint": "node --check src/report.mjs && node --check src/robots-txt.mjs && node --check src/directives.mjs && node --check src/index.mjs && node --check bin/robots-policy-auditor.mjs && node --check test/robots-txt.test.mjs && node --check test/directives.test.mjs && node --check test/audit.test.mjs && node --check test/cli.test.mjs && node --check test/parse-failure-redaction.test.mjs && node --check test/confinement.test.mjs && node --check test/incomplete.test.mjs && node --check test/severity-table.test.mjs",
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/**",
+    "example": "node bin/robots-policy-auditor.mjs --config examples/clean/robots-audit.config.json",
+    "pack:check": "npm pack --dry-run",
+    "check": "npm run lint && npm test && npm run example && npm run pack:check"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/edilec/robots-policy-auditor.git"
+  },
+  "bin": {
+    "robots-policy-auditor": "./bin/robots-policy-auditor.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "examples",
+    "docs",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "robots-txt",
+    "rfc9309",
+    "crawl",
+    "noindex",
+    "x-robots-tag",
+    "seo",
+    "audit",
+    "cli"
+  ],
+  "author": "Edilec Private Limited",
+  "bugs": {
+    "url": "https://github.com/edilec/robots-policy-auditor/issues"
+  },
+  "homepage": "https://github.com/edilec/robots-policy-auditor#readme"
+}

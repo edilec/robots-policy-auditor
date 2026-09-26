@@ -1,0 +1,13 @@
+# Crawl policy for example.com
+# Crawl permission only. Nothing here removes a URL from an index.
+
+User-agent: *
+Disallow: /search
+Allow: /search/help
+Disallow: /*.json$
+
+User-agent: ExampleBot
+Allow: /
+Disallow: /internal/
+
+Sitemap: https://example.com/sitemap.xml

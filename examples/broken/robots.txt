@@ -1,0 +1,14 @@
+# A deliberately broken policy. Every defect below is reported by the tool.
+Disallow: /early
+User-agent: *
+Disallow: /private
+Allow: /private/public-brief
+Crawl-delay: 10
+Noindex: /legacy
+Disallow: nonsense
+User-Agent: ExampleBot
+Disallow: /
+This line has no colon at all
+Unknown-thing: value
+User-agent: ExampleBot
+Disallow: /second

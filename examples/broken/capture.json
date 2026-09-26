@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "1",
+  "capturedAt": "2026-09-01 (recorded by the release pipeline, not fetched by this tool)",
+  "responses": [
+    {
+      "url": "https://example.com/private/report",
+      "status": 200,
+      "html": "capture/private-report.html"
+    },
+    {
+      "url": "https://example.com/legacy/page",
+      "status": 200,
+      "html": "capture/legacy-page.html"
+    },
+    {
+      "url": "https://example.com/offers",
+      "status": 200,
+      "headers": { "X-Robots-Tag": "noindex" },
+      "html": "capture/offers.html"
+    },
+    {
+      "url": "https://example.com/notes",
+      "status": 200,
+      "html": "capture/notes.html"
+    }
+  ]
+}
