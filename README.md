@@ -7,6 +7,9 @@ crawl permission and indexing strictly apart.
 - **Repository:** [edilec/robots-policy-auditor](https://github.com/edilec/robots-policy-auditor)
 - **Area:** SEO & Search
 - **License:** MIT
+- **Worked example:** [Robots Policy Auditor at Edilec](https://edilec.com/open-source/robots-policy-auditor/)
+  compares the checked-in clean and deliberately broken policy fixtures and explains what an offline
+  check cannot prove.
 
 ## Why the two axes are separate
 
