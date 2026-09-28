@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## Unreleased
+## 0.1.0 - 2026-09-28
 
 ### Added
 
@@ -71,5 +71,3 @@ All notable changes to this project are documented in this file.
   them, and `test/parse-failure-redaction.test.mjs` drives the AWS documentation placeholder
   through the real CLI and asserts it absent from stdout, from stderr and from every prefix down
   to eight characters.
-
-No release has been published.

@@ -11,6 +11,10 @@ crawl permission and indexing strictly apart.
   compares the checked-in clean and deliberately broken policy fixtures and explains what an offline
   check cannot prove.
 
+[![Monochrome concept illustration separating crawl access from indexing directives; open the worked example](https://edilec.com/brand/social/robots-policy-auditor-concept.jpg)](https://edilec.com/open-source/robots-policy-auditor/)
+
+Concept illustration only. The linked worked example shows the actual public synthetic fixture results; this image does not show a live crawl or a Google indexing decision.
+
 ## Why the two axes are separate
 
 `robots.txt` decides whether an agent may **fetch** a URL. `X-Robots-Tag` and `<meta name=robots>`
