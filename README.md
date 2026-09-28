@@ -30,12 +30,22 @@ thing is the most common robots mistake there is, and it fails in both direction
 
 ## Install and run
 
-Node 22 or newer. No runtime dependencies, no dev dependencies, nothing to install.
+Node 22 or newer. The tool has no runtime or development dependencies. Clone the public source to
+run its checked-in examples:
 
 ```sh
+git clone https://github.com/edilec/robots-policy-auditor.git
+cd robots-policy-auditor
 node bin/robots-policy-auditor.mjs --config examples/clean/robots-audit.config.json
 node bin/robots-policy-auditor.mjs --config examples/broken/robots-audit.config.json --json
 node bin/robots-policy-auditor.mjs --help
+```
+
+For a one-off command in a project with its own config, npm can run the versioned GitHub source
+directly. The package is **not published to the npm registry**:
+
+```sh
+npm exec --yes --package='git+https://github.com/edilec/robots-policy-auditor.git#v0.1.0' -- robots-policy-auditor --config ./robots-audit.config.json
 ```
 
 `stdout` carries the JSON report and nothing else, so it can be piped straight into a parser.
