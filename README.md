@@ -11,7 +11,7 @@ crawl permission and indexing strictly apart.
   compares the checked-in clean and deliberately broken policy fixtures and explains what an offline
   check cannot prove.
 
-[![Monochrome crawl gate separating crawl access from indexing directives; open the worked example](https://edilec.com/brand/social/robots-policy-auditor-concept.jpg)](https://edilec.com/open-source/robots-policy-auditor/)
+[![Monochrome crawl gate separating crawl access from indexing directives; open the worked example](https://edilec.com/brand/social/robots-policy-auditor-social-preview.jpg)](https://edilec.com/open-source/robots-policy-auditor/)
 
 ## Why the two axes are separate
 
